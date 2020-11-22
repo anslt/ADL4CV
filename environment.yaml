@@ -24,10 +24,10 @@ dependencies:
   - intel-openmp=2019.4=243
   - jpeg=9c=h14c3975_1001
   - kiwisolver=1.2.0=py36hdb11119_0
-  - ld_impl_linux-64=2.34=h53a641e_4
+  - ld_impl_linux-64=2.34=h53a641e_5
   - libffi=3.2.1=he1b5a44_1007
   - libgcc-ng=9.2.0=h24d8f2e_2
-  - libgfortran-ng=7.5.0=hdf63c60_6
+  - libgfortran-ng=7.5.0=hdf63c60_16
   - libgomp=9.2.0=h24d8f2e_2
   - libpng=1.6.37=hed695b0_1
   - libstdcxx-ng=9.2.0=hdf63c60_2
