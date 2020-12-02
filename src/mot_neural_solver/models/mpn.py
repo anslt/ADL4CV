@@ -71,29 +71,38 @@ class TimeAwareNodeModel(nn.Module):
     """
     Class used to peform the node update during Neural mwssage passing
     """
-    def __init__(self, flow_in_mlp, flow_out_mlp, node_mlp, node_agg_fn):
+    def __init__(self, flow_mlp, node_mlp, node_agg_fn, time_aware = True):
         super(TimeAwareNodeModel, self).__init__()
 
-        self.flow_in_mlp = flow_in_mlp
-        self.flow_out_mlp = flow_out_mlp
+        self.time_aware = time_aware
+        if time_aware:
+            self.flow_in_mlp = flow_mlp[0]
+            self.flow_out_mlp = flow_mlp[1]
+        else:
+            self.flow_mlp = flow_mlp
         self.node_mlp = node_mlp
         self.node_agg_fn = node_agg_fn
 
     def forward(self, x, edge_index, edge_attr):
         row, col = edge_index
-        flow_out_mask = row < col
-        flow_out_row, flow_out_col = row[flow_out_mask], col[flow_out_mask]
-        flow_out_input = torch.cat([x[flow_out_col], edge_attr[flow_out_mask]], dim=1)
-        flow_out = self.flow_out_mlp(flow_out_input)
-        flow_out = self.node_agg_fn(flow_out, flow_out_row, x.size(0))
+        if self.time_aware:
+            flow_out_mask = row < col
+            flow_out_row, flow_out_col = row[flow_out_mask], col[flow_out_mask]
+            flow_out_input = torch.cat([x[flow_out_col], edge_attr[flow_out_mask]], dim=1)
+            flow_out = self.flow_out_mlp(flow_out_input)
+            flow_out = self.node_agg_fn(flow_out, flow_out_row, x.size(0))
 
-        flow_in_mask = row > col
-        flow_in_row, flow_in_col = row[flow_in_mask], col[flow_in_mask]
-        flow_in_input = torch.cat([x[flow_in_col], edge_attr[flow_in_mask]], dim=1)
-        flow_in = self.flow_in_mlp(flow_in_input)
+            flow_in_mask = row > col
+            flow_in_row, flow_in_col = row[flow_in_mask], col[flow_in_mask]
+            flow_in_input = torch.cat([x[flow_in_col], edge_attr[flow_in_mask]], dim=1)
+            flow_in = self.flow_in_mlp(flow_in_input)
 
-        flow_in = self.node_agg_fn(flow_in, flow_in_row, x.size(0))
-        flow = torch.cat((flow_in, flow_out), dim=1)
+            flow_in = self.node_agg_fn(flow_in, flow_in_row, x.size(0))
+            flow = torch.cat((flow_in, flow_out), dim=1)
+        else:
+            flow_input = torch.cat([x[row], edge_attr], dim=1)
+            flow = self.flow_mlp(flow_input)
+            flow = self.node_agg_fn(flow, row, x.size(0))
 
         return self.node_mlp(flow)
 
