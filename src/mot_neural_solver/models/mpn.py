@@ -89,21 +89,12 @@ class AttentionModel(nn.Module):
 
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
-    def forward(self, x, edge_index, time_aware = 0):
-        row, col = edge_index
+    def forward(self, x, in_node, out_node):
+        row, col = in_node, out_node
         if self.use_hidden_layer:
             x = torch.mm(x, self.W)
 
-        if time_aware == 0:
-            h = torch.cat([x[row], x[col]], dim=1)
-        elif time_aware == 1:
-            flow_out_mask = row < col
-            row, col = row[flow_out_mask], col[flow_out_mask]
-            h = torch.cat([x[row], x[col]], dim=1)
-        elif time_aware == -1:
-            flow_in_mask = row > col
-            row, col = row[flow_in_mask], col[flow_in_mask]
-            h = torch.cat([x[row], x[col]], dim=1)
+        h = torch.cat([x[row], x[col]], dim=1)
 
         e = self.leakyrelu(torch.mm(h, self.a).squeeze(-1))
         alpha = torch_scatter.composite.scatter_softmax(e,row, dim=0, eps=1e-12)
@@ -141,14 +132,27 @@ class TimeAwareNodeModel(nn.Module):
         if self.time_aware:
             flow_out_mask = row < col
             flow_out_row, flow_out_col = row[flow_out_mask], col[flow_out_mask]
-            flow_out_input = torch.cat([x[flow_out_col], edge_attr[flow_out_mask]], dim=1)
+            flow_out_input = torch.cat([x[flow_out_row], edge_attr[flow_out_mask]], dim=1)
             flow_out = self.flow_out_mlp(flow_out_input)
+
+            if self.use_attention:
+                alphas = [att(x[flow_out_row], flow_out_row, flow_out_col) for att in self.attentions]
+                flow_out = torch.cat([self.node_agg_fn(flow_out_row * alpha, flow_out_row, x.size(0)) for alpha in alphas])
+            else:
+                flow_out = self.node_agg_fn(flow_out, flow_out_row, x.size(0))
+
             flow_out = self.node_agg_fn(flow_out, flow_out_row, x.size(0))
 
             flow_in_mask = row > col
             flow_in_row, flow_in_col = row[flow_in_mask], col[flow_in_mask]
-            flow_in_input = torch.cat([x[flow_in_col], edge_attr[flow_in_mask]], dim=1)
+            flow_in_input = torch.cat([x[flow_in_row], edge_attr[flow_in_mask]], dim=1)
             flow_in = self.flow_in_mlp(flow_in_input)
+
+            if self.use_attention:
+                alphas = [att(x[flow_in_row], flow_in_row, flow_in_col) for att in self.attentions]
+                flow_in = torch.cat([self.node_agg_fn(flow_in_row * alpha, flow_in_row, x.size(0)) for alpha in alphas])
+            else:
+                flow_in = self.node_agg_fn(flow_in, flow_in_row, x.size(0))
 
             flow_in = self.node_agg_fn(flow_in, flow_in_row, x.size(0))
             flow = torch.cat((flow_in, flow_out), dim=1)
@@ -156,7 +160,7 @@ class TimeAwareNodeModel(nn.Module):
             flow_input = torch.cat([x[row], edge_attr], dim=1)
             flow = self.flow_mlp(flow_input)
             if self.use_attention:
-                alphas = [att(x, edge_index) for att in self.attentions]
+                alphas = [att(x, row, col) for att in self.attentions]
                 flow = torch.cat([self.node_agg_fn(flow * alpha, row, x.size(0)) for alpha in alphas])
             else:
                 flow = self.node_agg_fn(flow, row, x.size(0))
