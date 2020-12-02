@@ -111,9 +111,12 @@ eval_params:
 graph_model_params:
 
   time_aware: True
-  use_attention: False
-  attention_head_num: 0
-
+  attention:
+    use_attention: False
+    use_hidden_layer: True
+    hidden_layer_dim: 8
+    alpha: 0.2
+    attention_head_num: 0
   node_agg_fn: 'sum'
   num_enc_steps: 12  # Number of message passing steps
   num_class_steps: 11  # Number of message passing steps during feature vectors are classified (after Message Passing)
