@@ -138,7 +138,7 @@ class TimeAwareNodeModel(nn.Module):
             flow_out = self.flow_out_mlp(flow_out_input)
 
             if self.use_attention:
-                alphas = [att(x[flow_out_row], flow_out_row, flow_out_col) for att in self.attentions]
+                alphas = [att(x, flow_out_row, flow_out_col) for att in self.attentions]
                 flow_out = torch.cat([self.node_agg_fn(flow_out_row * alpha.unsqueeze(-1), flow_out_row, x.size(0)) for alpha in alphas], dim=1)
             else:
                 flow_out = self.node_agg_fn(flow_out, flow_out_row, x.size(0))
@@ -149,7 +149,7 @@ class TimeAwareNodeModel(nn.Module):
             flow_in = self.flow_in_mlp(flow_in_input)
 
             if self.use_attention:
-                alphas = [att(x[flow_in_row], flow_in_row, flow_in_col) for att in self.attentions]
+                alphas = [att(x, flow_in_row, flow_in_col) for att in self.attentions]
                 flow_in = torch.cat([self.node_agg_fn(flow_in_row * alpha.unsqueeze(-1), flow_in_row, x.size(0)) for alpha in alphas], dim=1)
             else:
                 flow_in = self.node_agg_fn(flow_in, flow_in_row, x.size(0))
