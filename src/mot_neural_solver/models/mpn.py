@@ -100,7 +100,7 @@ class TimeAwareNodeModel(nn.Module):
             flow_in = self.node_agg_fn(flow_in, flow_in_row, x.size(0))
             flow = torch.cat((flow_in, flow_out), dim=1)
         else:
-            flow_input = torch.cat([x[row], x[col], edge_attr], dim=1)
+            flow_input = torch.cat([x[row], edge_attr], dim=1)
             flow = self.flow_mlp(flow_input)
             flow = self.node_agg_fn(flow, row, x.size(0))
 
@@ -213,6 +213,7 @@ class MOTMPNet(nn.Module):
 
         edge_factor = 2 if self.reattach_initial_edges else 1
         node_factor = 2 if self.reattach_initial_nodes else 1
+        time_factor = 2 if self.time_aware else 1
 
         edge_model_in_dim = node_factor * 2 * encoder_feats_dict['node_out_dim'] + edge_factor * encoder_feats_dict[
             'edge_out_dim']
@@ -228,6 +229,10 @@ class MOTMPNet(nn.Module):
                        dropout_p=edge_model_feats_dict['dropout_p'],
                        use_batchnorm=edge_model_feats_dict['use_batchnorm'])
 
+        node_mlp = nn.Sequential(
+            *[nn.Linear(time_factor * encoder_feats_dict['node_out_dim'], encoder_feats_dict['node_out_dim']),
+              nn.ReLU(inplace=True)])
+
         if self.time_aware:
             flow_in_mlp = MLP(input_dim=node_model_in_dim,
                               fc_dims=node_model_feats_dict['fc_dims'],
@@ -238,10 +243,6 @@ class MOTMPNet(nn.Module):
                                fc_dims=node_model_feats_dict['fc_dims'],
                                dropout_p=node_model_feats_dict['dropout_p'],
                                use_batchnorm=node_model_feats_dict['use_batchnorm'])
-
-            node_mlp = nn.Sequential(
-                *[nn.Linear(2 * encoder_feats_dict['node_out_dim'], encoder_feats_dict['node_out_dim']),
-                  nn.ReLU(inplace=True)])
 
             # Define all MLPs used within the MPN
             return MetaLayer(edge_model=EdgeModel(edge_mlp=edge_mlp),
@@ -254,16 +255,12 @@ class MOTMPNet(nn.Module):
                               dropout_p=node_model_feats_dict['dropout_p'],
                               use_batchnorm=node_model_feats_dict['use_batchnorm'])
 
-
-            node_mlp = node_mlp = nn.Sequential(
-                    *[nn.Linear(encoder_feats_dict['node_out_dim'], encoder_feats_dict['node_out_dim']),
-                      nn.ReLU(inplace=True)])
-
             # Define all MLPs used within the MPN
             return MetaLayer(edge_model=EdgeModel(edge_mlp = edge_mlp),
                              node_model=TimeAwareNodeModel(flow_mlp = flow_mlp,
                                                            node_mlp = node_mlp,
-                                                           node_agg_fn = node_agg_fn))
+                                                           node_agg_fn = node_agg_fn,
+                                                           time_aware=self.time_aware))
 
 
     def forward(self, data):
