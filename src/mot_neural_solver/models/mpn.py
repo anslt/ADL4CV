@@ -74,7 +74,7 @@ class AttentionModel(nn.Module):
         super(AttentionModel, self).__init__()
 
         self.alpha = configs["alpha"]
-        self.in_feature = configs["in_features"]
+        self.in_features = configs["in_features"]
         self.use_hidden_layer = configs["use_hidden_layer"]
         if self.use_hidden_layer:
             self.out_features = configs["hidden_layer_dim"]
@@ -126,6 +126,8 @@ class TimeAwareNodeModel(nn.Module):
             self.attentions = [AttentionModel(attention_configs) for _ in range(self.attention_num)]
             for i, attention in enumerate(self.attentions):
                 self.add_module('attention_{}'.format(i), attention)
+        else:
+            self.use_attention = False
 
     def forward(self, x, edge_index, edge_attr):
         row, col = edge_index
@@ -137,11 +139,9 @@ class TimeAwareNodeModel(nn.Module):
 
             if self.use_attention:
                 alphas = [att(x[flow_out_row], flow_out_row, flow_out_col) for att in self.attentions]
-                flow_out = torch.cat([self.node_agg_fn(flow_out_row * alpha, flow_out_row, x.size(0)) for alpha in alphas])
+                flow_out = torch.cat([self.node_agg_fn(flow_out_row * alpha.unsqueeze(-1), flow_out_row, x.size(0)) for alpha in alphas], dim=1)
             else:
                 flow_out = self.node_agg_fn(flow_out, flow_out_row, x.size(0))
-
-            flow_out = self.node_agg_fn(flow_out, flow_out_row, x.size(0))
 
             flow_in_mask = row > col
             flow_in_row, flow_in_col = row[flow_in_mask], col[flow_in_mask]
@@ -150,18 +150,17 @@ class TimeAwareNodeModel(nn.Module):
 
             if self.use_attention:
                 alphas = [att(x[flow_in_row], flow_in_row, flow_in_col) for att in self.attentions]
-                flow_in = torch.cat([self.node_agg_fn(flow_in_row * alpha, flow_in_row, x.size(0)) for alpha in alphas])
+                flow_in = torch.cat([self.node_agg_fn(flow_in_row * alpha.unsqueeze(-1), flow_in_row, x.size(0)) for alpha in alphas], dim=1)
             else:
                 flow_in = self.node_agg_fn(flow_in, flow_in_row, x.size(0))
 
-            flow_in = self.node_agg_fn(flow_in, flow_in_row, x.size(0))
             flow = torch.cat((flow_in, flow_out), dim=1)
         else:
             flow_input = torch.cat([x[row], edge_attr], dim=1)
             flow = self.flow_mlp(flow_input)
             if self.use_attention:
                 alphas = [att(x, row, col) for att in self.attentions]
-                flow = torch.cat([self.node_agg_fn(flow * alpha, row, x.size(0)) for alpha in alphas])
+                flow = torch.cat([self.node_agg_fn(flow * alpha.unsqueeze(-1), row, x.size(0)) for alpha in alphas], dim=1)
             else:
                 flow = self.node_agg_fn(flow, row, x.size(0))
 
@@ -290,7 +289,7 @@ class MOTMPNet(nn.Module):
 
         # Define attention property
         attention_configs = model_params["attention"]
-        attention_configs["in_features"] = node_model_in_dim
+        attention_configs["in_features"] = node_model_feats_dict['fc_dims'][-1]
         head_factor = attention_configs["attention_head_num"] if self.use_attention else 1
 
         edge_mlp = MLP(input_dim=edge_model_in_dim,
