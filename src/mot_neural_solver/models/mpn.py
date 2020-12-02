@@ -154,7 +154,7 @@ class TimeAwareNodeModel(nn.Module):
             else:
                 flow_in = self.node_agg_fn(flow_in, flow_in_row, x.size(0))
 
-            flow = torch.cat((flow_in, flow_out), dim=1)
+            flow = torch.cat([flow_in, flow_out], dim=1)
         else:
             flow_input = torch.cat([x[row], edge_attr], dim=1)
             flow = self.flow_mlp(flow_input)
