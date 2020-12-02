@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from torch_scatter import scatter_mean, scatter_max, scatter_add
+import torch_scatter
 
 from mot_neural_solver.models.mlp import MLP
 
@@ -67,14 +68,59 @@ class EdgeModel(nn.Module):
         out = torch.cat([source, target, edge_attr], dim=1)
         return self.edge_mlp(out)
 
+class AttentionModel(nn.Module):
+
+    def __init__(self, configs):
+        super(AttentionModel, self).__init__()
+
+        self.alpha = configs["alpha"]
+        self.in_feature = configs["in_features"]
+        self.use_hidden_layer = configs["use_hidden_layer"]
+        if self.use_hidden_layer:
+            self.out_features = configs["hidden_layer_dim"]
+        else:
+            self.out_features = self.in_feature
+
+        # add cuda directly
+        self.W = nn.Parameter(torch.empty(size=(self.in_features, self.out_features))).cuda()
+        nn.init.xavier_uniform_(self.W.data, gain=1.414)
+        self.a = nn.Parameter(torch.empty(size=(2 * self.out_features, 1))).cuda()
+        nn.init.xavier_uniform_(self.a.data, gain=1.414)
+
+        self.leakyrelu = nn.LeakyReLU(self.alpha)
+
+    def forward(self, x, edge_index, time_aware = 0):
+        row, col = edge_index
+        if self.use_hidden_layer:
+            x = torch.mm(x, self.W)
+
+        if time_aware == 0:
+            h = torch.cat([x[row], x[col]], dim=1)
+        elif time_aware == 1:
+            flow_out_mask = row < col
+            row, col = row[flow_out_mask], col[flow_out_mask]
+            h = torch.cat([x[row], x[col]], dim=1)
+        elif time_aware == -1:
+            flow_in_mask = row > col
+            row, col = row[flow_in_mask], col[flow_in_mask]
+            h = torch.cat([x[row], x[col]], dim=1)
+
+        e = self.leakyrelu(torch.mm(h, self.a).squeeze(-1))
+        alpha = torch_scatter.composite.scatter_softmax(e,row, dim=0, eps=1e-12)
+
+        return alpha
+
+
 class TimeAwareNodeModel(nn.Module):
     """
     Class used to peform the node update during Neural mwssage passing
     """
-    def __init__(self, flow_mlp, node_mlp, node_agg_fn, time_aware = True):
+
+    def __init__(self, flow_mlp, node_mlp, node_agg_fn, time_aware=True, attention_configs=None):
         super(TimeAwareNodeModel, self).__init__()
 
         self.time_aware = time_aware
+
         if time_aware:
             self.flow_in_mlp = flow_mlp[0]
             self.flow_out_mlp = flow_mlp[1]
@@ -82,6 +128,13 @@ class TimeAwareNodeModel(nn.Module):
             self.flow_mlp = flow_mlp
         self.node_mlp = node_mlp
         self.node_agg_fn = node_agg_fn
+
+        if attention_configs is not None and attention_configs["use_attention"] == True:
+            self.use_attention = attention_configs["use_attention"]
+            self.attention_num = attention_configs["attention_head_num"]
+            self.attentions = [AttentionModel(attention_configs) for _ in range(self.attention_num)]
+            for i, attention in enumerate(self.attentions):
+                self.add_module('attention_{}'.format(i), attention)
 
     def forward(self, x, edge_index, edge_attr):
         row, col = edge_index
@@ -102,9 +155,14 @@ class TimeAwareNodeModel(nn.Module):
         else:
             flow_input = torch.cat([x[row], edge_attr], dim=1)
             flow = self.flow_mlp(flow_input)
-            flow = self.node_agg_fn(flow, row, x.size(0))
+            if self.use_attention:
+                alphas = [att(x, edge_index) for att in self.attentions]
+                flow = torch.cat([self.node_agg_fn(flow * alpha, row, x.size(0)) for alpha in alphas])
+            else:
+                flow = self.node_agg_fn(flow, row, x.size(0))
 
         return self.node_mlp(flow)
+
 
 class MLPGraphIndependent(nn.Module):
     """
@@ -169,6 +227,7 @@ class MOTMPNet(nn.Module):
         self.node_cnn = bb_encoder
         self.model_params = model_params
         self.time_aware = model_params["time_aware"]
+        self.use_attention = model_params["attention"]["use_attention"]
 
         # Define Encoder and Classifier Networks
         encoder_feats_dict = model_params['encoder_feats_dict']
@@ -211,9 +270,11 @@ class MOTMPNet(nn.Module):
         self.reattach_initial_nodes = model_params['reattach_initial_nodes']
         self.reattach_initial_edges = model_params['reattach_initial_edges']
 
+
         edge_factor = 2 if self.reattach_initial_edges else 1
         node_factor = 2 if self.reattach_initial_nodes else 1
         time_factor = 2 if self.time_aware else 1
+
 
         edge_model_in_dim = node_factor * 2 * encoder_feats_dict['node_out_dim'] + edge_factor * encoder_feats_dict[
             'edge_out_dim']
@@ -223,14 +284,19 @@ class MOTMPNet(nn.Module):
         edge_model_feats_dict = model_params['edge_model_feats_dict']
         node_model_feats_dict = model_params['node_model_feats_dict']
 
+        # Define attention property
+        attention_configs = model_params["attention"]
+        attention_configs["in_features"] = node_model_in_dim
+        head_factor = attention_configs["attention_head_num"] if self.use_attention else 1
 
         edge_mlp = MLP(input_dim=edge_model_in_dim,
                        fc_dims=edge_model_feats_dict['fc_dims'],
                        dropout_p=edge_model_feats_dict['dropout_p'],
                        use_batchnorm=edge_model_feats_dict['use_batchnorm'])
 
+
         node_mlp = nn.Sequential(
-            *[nn.Linear(time_factor * encoder_feats_dict['node_out_dim'], encoder_feats_dict['node_out_dim']),
+            *[nn.Linear(head_factor * time_factor * encoder_feats_dict['node_out_dim'], encoder_feats_dict['node_out_dim']),
               nn.ReLU(inplace=True)])
 
         if self.time_aware:
@@ -248,7 +314,9 @@ class MOTMPNet(nn.Module):
             return MetaLayer(edge_model=EdgeModel(edge_mlp=edge_mlp),
                              node_model=TimeAwareNodeModel(flow_mlp=[flow_in_mlp, flow_out_mlp],
                                                            node_mlp=node_mlp,
-                                                           node_agg_fn=node_agg_fn))
+                                                           node_agg_fn=node_agg_fn,
+                                                           time_aware=self.time_aware,
+                                                           attention_configs=attention_configs))
         else:
             flow_mlp = MLP(input_dim=node_model_in_dim,
                               fc_dims=node_model_feats_dict['fc_dims'],
@@ -260,7 +328,8 @@ class MOTMPNet(nn.Module):
                              node_model=TimeAwareNodeModel(flow_mlp = flow_mlp,
                                                            node_mlp = node_mlp,
                                                            node_agg_fn = node_agg_fn,
-                                                           time_aware=self.time_aware))
+                                                           time_aware=self.time_aware,
+                                                           attention_configs=attention_configs))
 
 
     def forward(self, data):
