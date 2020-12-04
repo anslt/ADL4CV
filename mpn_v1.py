@@ -87,9 +87,9 @@ class AttentionModel(nn.Module):
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
     def forward(self, x,row,col):
-        xx = torch.cat([x[row], x[col]], dim=1)                               # [M,32]+[M,32]->[M,64]
-        e = self.leakyrelu(torch.matmul(self.aa,xx.T))                        # [k,64]*[64,M]->[k,M]
-        a = torch_scatter.composite.scatter_softmax(e,row, dim=1, eps=1e-12)  # [k,M]->[k,M]
+        xx = torch.cat([x[row], x[col]], dim=1)                                                          # cat([M,d=32],[M,d=32])->[M,d=64]
+        e = self.leakyrelu(torch.matmul(self.aa,xx.T))                                                   # [k,64]*[64,M]->[k,M]
+        a = torch_scatter.composite.scatter_softmax(e,row, dim=1, eps=1e-12)                             # [k,M]->[k,M]
         return a
 
 class TimeAwareNodeModel(nn.Module):
@@ -116,17 +116,17 @@ class TimeAwareNodeModel(nn.Module):
             self.head_factor = 1
 
     def forward(self, x, edge_index, edge_attr):
-        row, col = edge_index
+        row, col = edge_index                                                                               # [M,]
         if self.time_aware:
-            flow_out_mask = row < col
-            flow_out_row, flow_out_col = row[flow_out_mask], col[flow_out_mask]
-            flow_out_input = torch.cat([x[flow_out_row], edge_attr[flow_out_mask]], dim=1)                  # [M,32+16]
-            #flow_out = torch.empty(size=(self.head_factor,flow_out_input.shape[0],32))
+            flow_out_mask = row < col                                                                       # [M1,]
+            flow_out_row, flow_out_col = row[flow_out_mask], col[flow_out_mask]                             # [M1,] [M1,]
+            flow_out_input = torch.cat([x[flow_out_row], edge_attr[flow_out_mask]], dim=1)                  # [M1,d=32+2*16]
+            #flow_out = torch.empty(size=(self.head_factor,flow_out_input.shape[0],32)) 
             flow_out = []
 
-            flow_in_mask = row > col
-            flow_in_row, flow_in_col = row[flow_in_mask], col[flow_in_mask]
-            flow_in_input = torch.cat([x[flow_in_row], edge_attr[flow_in_mask]], dim=1)                  # [M,32+16]
+            flow_in_mask = row > col                                                                        # [M2,]
+            flow_in_row, flow_in_col = row[flow_in_mask], col[flow_in_mask]                                 # [M2,] [M2,]
+            flow_in_input = torch.cat([x[flow_in_row], edge_attr[flow_in_mask]], dim=1)                     # [M2,32+2*16]
             #flow_in = torch.empty(size=(self.head_factor,flow_in_input.shape[0],32))
             flow_in = []
             for i in range(self.head_factor):
@@ -134,7 +134,7 @@ class TimeAwareNodeModel(nn.Module):
                 #flow_in[i] = self.flow_in_mlp[i](flow_in_input)
                 flow_out.append(self.flow_out_mlp[i](flow_out_input).cuda())
                 flow_in.append(self.flow_in_mlp[i](flow_in_input).cuda())
-            flow_out = torch.stack(flow_out,dim=0)
+            flow_out = torch.stack(flow_out,dim=0)                                                          # []
             flow_in = torch.stack(flow_in,dim=0)
 
             if self.use_attention:
