@@ -119,13 +119,13 @@ class TimeAwareNodeModel(nn.Module):
         row, col = edge_index                                                                               # [M,]
         if self.time_aware:
             flow_out_mask = row < col                                                                       # [M1,]
-            flow_out_row, flow_out_col = row[flow_out_mask], col[flow_out_mask]                             # [M1,] [M1,]
+            flow_out_row, flow_out_col = row[flow_out_mask], col[flow_out_mask]                             # [M,] -> [M1,]
             flow_out_input = torch.cat([x[flow_out_row], edge_attr[flow_out_mask]], dim=1)                  # [M1,d=32+2*16]
             #flow_out = torch.empty(size=(self.head_factor,flow_out_input.shape[0],32)) 
             flow_out = []
 
             flow_in_mask = row > col                                                                        # [M2,]
-            flow_in_row, flow_in_col = row[flow_in_mask], col[flow_in_mask]                                 # [M2,] [M2,]
+            flow_in_row, flow_in_col = row[flow_in_mask], col[flow_in_mask]                                 # [M,] -> [M2,]
             flow_in_input = torch.cat([x[flow_in_row], edge_attr[flow_in_mask]], dim=1)                     # [M2,32+2*16]
             #flow_in = torch.empty(size=(self.head_factor,flow_in_input.shape[0],32))
             flow_in = []
@@ -133,43 +133,44 @@ class TimeAwareNodeModel(nn.Module):
                 #flow_out[i] = self.flow_out_mlp[i](flow_out_input)  # [M,48]->[k,M,32]
                 #flow_in[i] = self.flow_in_mlp[i](flow_in_input)
                 flow_out.append(self.flow_out_mlp[i](flow_out_input).cuda())
-                flow_in.append(self.flow_in_mlp[i](flow_in_input).cuda())
-            flow_out = torch.stack(flow_out,dim=0)                                                          # []
-            flow_in = torch.stack(flow_in,dim=0)
-
+                flow_in.append(self.flow_in_mlp[i](flow_in_input).cuda())                                     
+            flow_out = torch.stack(flow_out,dim=0)                                                          # [k,M1,d=32] 
+            flow_in = torch.stack(flow_in,dim=0)                                                            # [k,M2,d=32]
+ 
             if self.use_attention:
-                a_out = self.attention_out(x,flow_out_row,flow_out_col) # [k,M]
-                a_in = self.attention_in(x,flow_in_row,flow_out_col) # [k,M]
+                a_out = self.attention_out(x,flow_out_row,flow_out_col)                                     # [k,M1]
+                a_in = self.attention_in(x,flow_in_row,flow_out_col)                                        # [k,M2]
                 flow_out = torch.mul(flow_out.transpose(0,2),a_out.transpose(0,1)).transpose(0,1).transpose(1,2).reshape(flow_out_row.shape[0],-1)
+                # [d=32,M1,k] [M1,k] -> [d=32,M1,k] -> [M1,32,k] -> [M1,k,32] -> [M1,32k]
                 flow_in = torch.mul(flow_in.transpose(0,2),a_in.transpose(0,1)).transpose(0,1).transpose(1,2).reshape(flow_in_row.shape[0],-1) 
-                # [32,M,k] [M,k] -> [32,M,k] -> [M,32,k] -> [M,k,32] -> [M,32k]
-                flow_out =  self.node_agg_fn(flow_out, flow_out_row, x.size(0))
-                flow_in =  self.node_agg_fn(flow_in, flow_in_row, x.size(0))  # [M,32k] -> [N,32k]
+                # [d=32,M2,k] [M2,k] -> [d=32,M2,k] -> [M2,32,k] -> [M2,k,32] -> [M2,32k]
+                flow_out =  self.node_agg_fn(flow_out, flow_out_row, x.size(0))                             # [M1,32k] -> [N,32k]
+                flow_in =  self.node_agg_fn(flow_in, flow_in_row, x.size(0))  # [M,32k] -> [N,32k]          # [M2,32k] -> [N,32k]
                 
-                a = torch.empty(size=(self.head_factor,row.shape[0])).cuda()
-                a.T[flow_out_mask]=a_out.T
-                a.T[flow_in_mask]=a_in.T
+                a = torch.empty(size=(self.head_factor,row.shape[0])).cuda()                                # [M,] 
+                a.T[flow_out_mask]=a_out.T                                                                  # put [M1,] to [M,]
+                a.T[flow_in_mask]=a_in.T                                                                    # put [M2,] to [M,]
             else:
-                flow_out = self.node_agg_fn(torch.squeeze(flow_out,0), flow_out_row, x.size(0))
-                flow_in = self.node_agg_fn(torch.squeeze(flow_in,0), flow_in_row, x.size(0))
-            flow = torch.cat([flow_in, flow_out], dim=1)                        # [N,64k] -> [N,32]
+                flow_out = self.node_agg_fn(torch.squeeze(flow_out,0), flow_out_row, x.size(0))             # [1,M1,d=32] -> [M1,d=32] -> [N,32] 
+                flow_in = self.node_agg_fn(torch.squeeze(flow_in,0), flow_in_row, x.size(0))                # [1,M2,d=32] -> [M2,d=32] -> [N,32]
+            flow = torch.cat([flow_in, flow_out], dim=1)                                                    # cat([N,32],[N32]) -> [N,64]
         else:
-            flow_input = torch.cat([x[row], edge_attr], dim=1)
-            flow = []
+            flow_input = torch.cat([x[row], edge_attr], dim=1)                                              # cat([M,d=32],[M,d=16*2]) -> [M,64]
+            flow = []       
             for i in range(self.head_factor):
-                flow.append(self.flow_out_mlp[i](flow_input))             # [M,48]->[k,M,32]
-            flow = torch.stack(flow,dim=0)
+                flow.append(self.flow_out_mlp[i](flow_input))                                               # [M,d=64]->[k,M,d=32]
+            flow = torch.stack(flow,dim=0)                                                                  # [k,M,d=32]
             
             if self.use_attention:
-                a = self.attention_out(x,row,col)
+                a = self.attention_out(x,row,col)                                                           # [k,M]
                 flow = torch.mul(flow.transpose(0,2),a.transpose(0,1)).transpose(0,1).transpose(1,2).reshape(row.shape[0],-1)
-                flow =  self.node_agg_fn(flow, row, x.size(0))
-
+                # [d=32,M,k] [M,k] -> [d=32,M,k] -> [M,32,k] -> [M,k,32] -> [M,32k]
+                flow =  self.node_agg_fn(flow, row, x.size(0))                                              # [M,32k] -> [N,32k]
             else:
-                flow = self.node_agg_fn(torch.squeeze(flow,0), row, x.size(0))
+                flow = self.node_agg_fn(torch.squeeze(flow,0), row, x.size(0))                              # [1,M,32] -> [M,32] -> [N,32]
         if self.use_attention:
-            return self.node_mlp(flow),a
-        else: return self.node_mlp(flow)
+            return self.node_mlp(flow),a                                                                    # [N,32] [k,M]
+        else: return self.node_mlp(flow)                                                                    # [N,32]
 
 
 class MLPGraphIndependent(nn.Module):
