@@ -116,6 +116,7 @@ graph_model_params:
     use_supervision: False
     alpha: 0.2
     attention_head_num: 1
+    attention_supervision_strength: 1
 
 
   node_agg_fn: 'sum'
