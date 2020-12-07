@@ -96,7 +96,7 @@ class MOTNeuralSolver(pl.LightningModule):
         positive_vals = batch.edge_labels.sum()
         head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
         att_regu_strength = self.hparams['train_params']['att_regu_strength']
-        use_attetion = self.hparams['graph_model_params']['attention']['use_attention']
+        use_attention = self.hparams['graph_model_params']['attention']['use_attention']
         if positive_vals:
             pos_weight = (batch.edge_labels.shape[0] - positive_vals) / positive_vals
 
