@@ -177,7 +177,7 @@ class MOTGraphDataset:
         return seq_frame_ixs
 
     def get_from_frame_and_seq(self, seq_name, start_frame, max_frame_dist, end_frame = None, ensure_end_is_in = False,
-                               return_full_object = False, inference_mode =False):
+                               return_full_object = False, inference_mode =False,ix=-1):
         """
         Method behind __getitem__ method. We load a graph object of the given sequence name, starting at 'start_frame'.
 
@@ -211,7 +211,8 @@ class MOTGraphDataset:
                              ensure_end_is_in=ensure_end_is_in,
                              max_frame_dist = max_frame_dist,
                              cnn_model = self.cnn_model,
-                             inference_mode=inference_mode)
+                             inference_mode=inference_mode,
+                             ix=ix)
 
         if self.mode == 'train' and self.augment:
             mot_graph.augment()
@@ -236,6 +237,14 @@ class MOTGraphDataset:
                                            start_frame = start_frame,
                                            end_frame=None,
                                            ensure_end_is_in=False,
-                                           return_full_object=False,
+                                           return_full_object=full,
                                            inference_mode=False,
-                                           max_frame_dist=self.dataset_params['max_frame_dist'])
+                                           max_frame_dist=self.dataset_params['max_frame_dist'],
+                                           ix=ix)
+
+    def get(self,ix):
+        seq_name, start_frame = self.seq_frame_ixs[ix]
+        return {"seq_det_df" : self.seq_det_dfs[seq_name],
+                 "seq_info_dict" :self.seq_info_dicts[seq_name],
+                 "seq_step_size" : self.seq_info_dicts[seq_name]['step_size']}
+

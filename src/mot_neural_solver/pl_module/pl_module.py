@@ -34,6 +34,7 @@ class MOTNeuralSolver(pl.LightningModule):
         self.model, self.cnn_model = self.load_model()
         self.right_num = 0
         self.total_num = 0
+        self.i = 0
     
     def forward(self, x):
         self.model(x)
@@ -61,6 +62,7 @@ class MOTNeuralSolver(pl.LightningModule):
                                   cnn_model=self.cnn_model,
                                   splits= self.hparams['data_splits'][mode],
                                   logger=None)
+        self.dataset = dataset
 
         if return_data_loader and len(dataset) > 0:
             train_dataloader = DataLoader(dataset,
@@ -118,6 +120,8 @@ class MOTNeuralSolver(pl.LightningModule):
                                                              batch.edge_labels.view(-1),
                                                              pos_weight=pos_weight)
 
+        print(self.dataset.get(batch.ix[0].to(torch.int64)))
+        """
         total_edge = torch.sum(batch.edge_labels.view(-1)).cpu().item()
         valid_edge = torch.sum(outputs["illustrate"] * batch.edge_labels.view(-1).unsqueeze(-1),dim=0)
         print("\n")
@@ -125,6 +129,7 @@ class MOTNeuralSolver(pl.LightningModule):
         print(valid_edge)
         print(total_edge/valid_edge)
         print("\n")
+        """
 
         if not use_attention or not use_supervision:
             return loss_class
@@ -147,6 +152,7 @@ class MOTNeuralSolver(pl.LightningModule):
         return loss_class + att_regu_strength * att_loss
 
     def _train_val_step(self, batch, batch_idx, train_val):
+        self.i += 1
         device = (next(self.model.parameters())).device
         batch.to(device)
 
@@ -156,6 +162,8 @@ class MOTNeuralSolver(pl.LightningModule):
         log = {key + f'/{train_val}': val for key, val in logs.items()}
 
         if train_val == 'train':
+
+            print(batch.ix)
             return {'loss': loss, 'log': log}
 
         else:

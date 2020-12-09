@@ -15,8 +15,9 @@ class Graph(Data):
     This is the class we use to instantiate our graph objects. We inherit from torch_geometric's Data class and add a
     few convenient methods to it, mostly related to changing data types in a single call.
     """
-    def __init__(self, **kwargs):
+    def __init__(self,ix=-1, **kwargs):
         super().__init__(**kwargs)
+        self.ix = torch.Tensor([ix]).cuda()
 
     def _change_attrs_types(self, attr_change_fn):
         """
@@ -82,7 +83,7 @@ class MOTGraph(object):
 
     """
     def __init__(self, seq_det_df = None, start_frame = None, end_frame = None, ensure_end_is_in = False, step_size = None,
-                 seq_info_dict = None, dataset_params = None, inference_mode = False, cnn_model = None, max_frame_dist = None):
+                 seq_info_dict = None, dataset_params = None, inference_mode = False, cnn_model = None, max_frame_dist = None,ix=-1):
         self.dataset_params = dataset_params
         self.step_size = step_size
         self.seq_info_dict = seq_info_dict
@@ -90,8 +91,8 @@ class MOTGraph(object):
         self.max_frame_dist = max_frame_dist
 
         self.cnn_model = cnn_model
+        self.ix = ix
 
-        if seq_det_df is not None:
             self.graph_df, self.frames = self._construct_graph_df(seq_det_df= seq_det_df.copy(),
                                                                   start_frame = start_frame,
                                                                   end_frame = end_frame,
@@ -286,7 +287,8 @@ class MOTGraph(object):
 
         self.graph_obj = Graph(x = node_feats,
                                edge_attr = torch.cat((edge_feats, edge_feats), dim = 0),
-                               edge_index = torch.cat((edge_ixs, torch.stack((edge_ixs[1], edge_ixs[0]))), dim=1))
+                               edge_index = torch.cat((edge_ixs, torch.stack((edge_ixs[1], edge_ixs[0]))), dim=1),
+                               ix=self.ix)
 
         if self.inference_mode:
             self.graph_obj.reid_emb_dists = torch.cat((emb_dists, emb_dists))
