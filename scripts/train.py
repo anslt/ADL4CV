@@ -12,6 +12,7 @@ from mot_neural_solver.pl_module.pl_module import MOTNeuralSolver
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 #from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+import torch
 
 from sacred import SETTINGS
 SETTINGS.CONFIG.READ_ONLY_CONFIG=False
@@ -66,7 +67,8 @@ def main(_config, _run):
     ckpt_callback = ModelCheckpoint(save_epoch_start = _config['train_params']['save_epoch_start'],
                                     save_every_epoch = _config['train_params']['save_every_epoch'])
 
-    trainer = Trainer(gpus=1,
+    if torch.cuda.is_available():
+        trainer = Trainer(gpus=1,
                       callbacks=[MOTMetricsLogger(compute_oracle_results = _config['eval_params']['normalize_mot_metrics']), ckpt_callback],
                       weights_summary = None,
                       checkpoint_callback=False,
@@ -76,6 +78,21 @@ def main(_config, _run):
                       nb_sanity_val_steps=0,
                       logger =logger,
                       default_save_path=osp.join(OUTPUT_PATH, 'experiments', run_str))
+    else:
+        trainer = Trainer(gpus=0,
+                          callbacks=[
+                              MOTMetricsLogger(compute_oracle_results=_config['eval_params']['normalize_mot_metrics']),
+                              ckpt_callback],
+                          weights_summary=None,
+                          checkpoint_callback=False,
+                          max_epochs=_config['train_params']['num_epochs'],
+                          val_percent_check=_config['eval_params']['val_percent_check'],
+                          check_val_every_n_epoch=_config['eval_params']['check_val_every_n_epoch'],
+                          nb_sanity_val_steps=0,
+                          logger=logger,
+                          default_save_path=osp.join(OUTPUT_PATH, 'experiments', run_str))
+
+
     trainer.fit(model)
 
 

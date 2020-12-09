@@ -304,7 +304,10 @@ class MOTSeqProcessor:
             frame_nums, det_ids = [], []
             with torch.no_grad():
                 for frame_num, det_id, bboxes in bbox_loader:
-                    node_out, reid_out = self.cnn_model(bboxes.cuda())
+                    if torch.cuda.is_available():
+                        node_out, reid_out = self.cnn_model(bboxes.cuda())
+                    else:
+                        node_out, reid_out = self.cnn_model(bboxes)
                     node_embeds.append(node_out.cpu())
                     reid_embeds.append(reid_out.cpu())
                     frame_nums.append(frame_num)

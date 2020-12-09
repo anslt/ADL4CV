@@ -86,7 +86,7 @@ class AttentionModel(nn.Module):
         self.attention_head_num = configs["attention_head_num"]
 
         # add cuda directly
-        self.aa = nn.Parameter(torch.empty(size=(self.attention_head_num, 2 * self.in_features))).cuda()  # [k,64]
+        self.aa = nn.Parameter(torch.empty(size=(self.attention_head_num, 2 * self.in_features)))  # [k,64]
         nn.init.xavier_uniform_(self.aa.data, gain=1.414)
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
@@ -331,14 +331,14 @@ class MOTMPNet(nn.Module):
             flow_out_mlp.append(MLP(input_dim=node_model_in_dim,
                                     fc_dims=node_model_feats_dict_time['fc_dims'],
                                     dropout_p=node_model_feats_dict_time['dropout_p'],
-                                    use_batchnorm=node_model_feats_dict_time['use_batchnorm']).cuda())
+                                    use_batchnorm=node_model_feats_dict_time['use_batchnorm']))
         if self.time_aware:
             flow_in_mlp = []
             for i in range(head_factor):
                 flow_in_mlp.append(MLP(input_dim=node_model_in_dim,
                                        fc_dims=node_model_feats_dict_time['fc_dims'],
                                        dropout_p=node_model_feats_dict_time['dropout_p'],
-                                       use_batchnorm=node_model_feats_dict_time['use_batchnorm']).cuda())
+                                       use_batchnorm=node_model_feats_dict_time['use_batchnorm']))
             return MetaLayer(edge_model=EdgeModel(edge_mlp=edge_mlp),
                              node_model=TimeAwareNodeModel(flow_out_mlp=flow_out_mlp,
                                                            flow_in_mlp=flow_in_mlp,
@@ -417,8 +417,49 @@ class MOTMPNet(nn.Module):
             if self.use_attention and step >= first_attention_step:
                 outputs_dict['att_coefficients'].append(a)
 
+
+
         if self.num_enc_steps == 0:
             dec_edge_feats, _ = self.classifier(latent_edge_feats)
             outputs_dict['classified_edges'].append(dec_edge_feats)
 
+        print(a.size())
+        index_max = torch.max(edge_index[0, :]).cpu().item()
+        index = 0
+        illustrate1 = torch.zeros_like(edge_index[0, :])
+        illustrate3 = torch.zeros_like(edge_index[0, :])
+        illustrate5 = torch.zeros_like(edge_index[0, :])
+
+        list_index = []
+        list_index_same_index = []
+        _, num = edge_index.size()
+        print(edge_index[0, :])
+        for i in range(num):
+            while index == edge_index[0, i]:
+                index += 1
+                list_index += [list_index_same_index]
+                list_index_same_index = []
+            list_index_same_index += [i]
+
+        list_index = list_index[1:]
+        print(list_index)
+        alias = edge_index[0, :].detach()
+        index = 0
+        for i in list_index:
+            if i == []:
+                continue
+            temp = a[i]
+            print(temp)
+            for j in range(5):
+                k = torch.argmax(temp)
+                temp[k] = 0
+                illustrate5[k + index] = 1
+                if j < 3:
+                    illustrate3[k + index] = 1
+                    if j < 1:
+                        illustrate1[k + index] = 1
+            index += len(i)
+
+        illustrate = torch.stack([illustrate1, illustrate3, illustrate5], dim=1)
+        outputs_dict["illustrate"] = illustrate
         return outputs_dict

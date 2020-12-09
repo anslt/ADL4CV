@@ -38,6 +38,7 @@ class MOTGraphDataset:
 
             # Index the dataset (i.e. assign a pair (scene, starting frame) to each integer from 0 to len(dataset) -1)
             self.seq_frame_ixs = self._index_dataset()
+            #print(self.seq_frame_ixs)
 
     def _get_seqs_to_retrieve_from_splits(self, splits):
         """

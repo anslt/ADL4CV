@@ -32,15 +32,21 @@ class MOTNeuralSolver(pl.LightningModule):
 
         self.hparams = hparams
         self.model, self.cnn_model = self.load_model()
+        self.right_num = 0
+        self.total_num = 0
     
     def forward(self, x):
         self.model(x)
 
     def load_model(self):
         cnn_arch = self.hparams['graph_model_params']['cnn_params']['arch']
-        model =  MOTMPNet(self.hparams['graph_model_params']).cuda()
+        if torch.cuda.is_available():
+            model = MOTMPNet(self.hparams['graph_model_params']).cuda()
+            cnn_model = resnet50_fc256(10, loss='xent', pretrained=True).cuda()
+        else:
+            model = MOTMPNet(self.hparams['graph_model_params'])
+            cnn_model = resnet50_fc256(10, loss='xent', pretrained=True)
 
-        cnn_model = resnet50_fc256(10, loss='xent', pretrained=True).cuda()
         load_pretrained_weights(cnn_model,
                                 osp.join(OUTPUT_PATH, self.hparams['graph_model_params']['cnn_params']['model_weights_path'][cnn_arch]))
         cnn_model.return_embeddings = True
@@ -111,6 +117,15 @@ class MOTNeuralSolver(pl.LightningModule):
             loss_class += F.binary_cross_entropy_with_logits(outputs['classified_edges'][step].view(-1),
                                                              batch.edge_labels.view(-1),
                                                              pos_weight=pos_weight)
+
+        total_edge = torch.sum(batch.edge_labels.view(-1)).cpu().item()
+        valid_edge = torch.sum(outputs["illustrate"] * batch.edge_labels.view(-1).unsqueeze(-1),dim=0)
+        print("\n")
+        print(total_edge)
+        print(valid_edge)
+        print(total_edge/valid_edge)
+        print("\n")
+
         if not use_attention or not use_supervision:
             return loss_class
 
