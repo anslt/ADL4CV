@@ -177,8 +177,8 @@ class MOTNeuralSolver(pl.LightningModule):
             for k in range(k0):
                 b = a.detach().cpu()
                 b = b[matches[k]].tolist()
-                index_largest = heapq.nlargest(3, range(len(b)), key=stat.__getitem__)
-                index_smallest = heapq.nsmallest(3, range(len(b)), key=stat.__getitem__)
+                index_largest = heapq.nlargest(3, range(len(b)), key=b.__getitem__)
+                index_smallest = heapq.nsmallest(3, range(len(b)), key=b.__getitem__)
 
                 tuple_det = MOTGraph[graph_index[k]].graph_df.iloc[choices_index[k] - local_base[k]]
                 path = tuple_det["frame_path"]
@@ -220,8 +220,7 @@ class MOTNeuralSolver(pl.LightningModule):
 
                     # Here the image "im" is cropped and assigned to new variable im_crop
                     im_crop = im.crop((left, upper, right, lower))
-                    filename = "/content/ADL4CV/image/" + str(self.i // 748) + "_pic" + str(k) + "_small" + str(
-                        key) + ".jpg"
+                    filename = "/content/ADL4CV/image/" + str(self.i // 748) + "_pic" + str(k) + "_small" + str(key) + ".jpg"
                     im_crop.save(filename)
 
         """
