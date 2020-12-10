@@ -86,7 +86,7 @@ class AttentionModel(nn.Module):
         self.attention_head_num = configs["attention_head_num"]
 
         # add cuda directly
-        self.aa = nn.Parameter(torch.empty(size=(self.attention_head_num, 2 * self.in_features)))  # [k,64]
+        self.aa = nn.Parameter(torch.empty(size=(self.attention_head_num, 2 * self.in_features))).cuda()  # [k,64]
         nn.init.xavier_uniform_(self.aa.data, gain=1.414)
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
@@ -331,14 +331,14 @@ class MOTMPNet(nn.Module):
             flow_out_mlp.append(MLP(input_dim=node_model_in_dim,
                                     fc_dims=node_model_feats_dict_time['fc_dims'],
                                     dropout_p=node_model_feats_dict_time['dropout_p'],
-                                    use_batchnorm=node_model_feats_dict_time['use_batchnorm']))
+                                    use_batchnorm=node_model_feats_dict_time['use_batchnorm']).cuda())
         if self.time_aware:
             flow_in_mlp = []
             for i in range(head_factor):
                 flow_in_mlp.append(MLP(input_dim=node_model_in_dim,
                                        fc_dims=node_model_feats_dict_time['fc_dims'],
                                        dropout_p=node_model_feats_dict_time['dropout_p'],
-                                       use_batchnorm=node_model_feats_dict_time['use_batchnorm']))
+                                       use_batchnorm=node_model_feats_dict_time['use_batchnorm']).cuda())
             return MetaLayer(edge_model=EdgeModel(edge_mlp=edge_mlp),
                              node_model=TimeAwareNodeModel(flow_out_mlp=flow_out_mlp,
                                                            flow_in_mlp=flow_in_mlp,
@@ -423,6 +423,7 @@ class MOTMPNet(nn.Module):
             dec_edge_feats, _ = self.classifier(latent_edge_feats)
             outputs_dict['classified_edges'].append(dec_edge_feats)
 
+        """
         print(a.size())
         index_max = torch.max(edge_index[0, :]).cpu().item()
         index = 0
@@ -462,4 +463,6 @@ class MOTMPNet(nn.Module):
 
         illustrate = torch.stack([illustrate1, illustrate3, illustrate5], dim=1)
         outputs_dict["illustrate"] = illustrate
+        """
+
         return outputs_dict

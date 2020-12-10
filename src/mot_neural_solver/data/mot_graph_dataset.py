@@ -237,14 +237,21 @@ class MOTGraphDataset:
                                            start_frame = start_frame,
                                            end_frame=None,
                                            ensure_end_is_in=False,
-                                           return_full_object=full,
+                                           return_full_object=False,
                                            inference_mode=False,
                                            max_frame_dist=self.dataset_params['max_frame_dist'],
                                            ix=ix)
 
     def get(self,ix):
         seq_name, start_frame = self.seq_frame_ixs[ix]
-        return {"seq_det_df" : self.seq_det_dfs[seq_name],
+        return {"MOTGraph" : self.get_from_frame_and_seq(seq_name= seq_name,
+                                           start_frame = start_frame,
+                                           end_frame=None,
+                                           ensure_end_is_in=False,
+                                           return_full_object=True,
+                                           inference_mode=False,
+                                           max_frame_dist=self.dataset_params['max_frame_dist'],
+                                           ix=ix),
                  "seq_info_dict" :self.seq_info_dicts[seq_name],
                  "seq_step_size" : self.seq_info_dicts[seq_name]['step_size']}
 

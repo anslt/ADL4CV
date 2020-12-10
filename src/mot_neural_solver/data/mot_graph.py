@@ -17,7 +17,7 @@ class Graph(Data):
     """
     def __init__(self,ix=-1, **kwargs):
         super().__init__(**kwargs)
-        self.ix = torch.Tensor([ix]).cuda()
+        self.ix = torch.Tensor([ix]).to(torch.int64)
 
     def _change_attrs_types(self, attr_change_fn):
         """
@@ -34,7 +34,8 @@ class Graph(Data):
                            'node_names', # Node names (integer values)
                            'edge_labels', # Edge labels according to Network Flow MOT formulation
                            'edge_preds', # Predicted approximation to edge labels
-                           'reid_emb_dists'] # Reid distance for each edge
+                           'reid_emb_dists',
+                            'ix'] # Reid distance for each edge
 
         for attr_name in _data_attr_names:
             if hasattr(self, attr_name):
@@ -93,6 +94,7 @@ class MOTGraph(object):
         self.cnn_model = cnn_model
         self.ix = ix
 
+        if seq_det_df is not None:
             self.graph_df, self.frames = self._construct_graph_df(seq_det_df= seq_det_df.copy(),
                                                                   start_frame = start_frame,
                                                                   end_frame = end_frame,
