@@ -121,30 +121,68 @@ class MOTNeuralSolver(pl.LightningModule):
             return loss_class + att_regu_strength*loss_att
         return loss_class
 
-
-    def _train_val_step(self, batch, batch_idx, train_val):
+    def training_step(self, batch, batch_idx):
         device = (next(self.model.parameters())).device
         batch.to(device)
-
         outputs = self.model(batch)
         loss = self._compute_loss(outputs, batch)
         logs = {**compute_perform_metrics(outputs, batch), **{'loss': loss}}
-        log = {key + f'/{train_val}': val for key, val in logs.items()}
-
-        if train_val == 'train':
-            return {'loss': loss, 'log': log}
-
-        else:
-            return log
-
-    def training_step(self, batch, batch_idx):
-        return self._train_val_step(batch, batch_idx, 'train')
+        log = {key + '/train': val for key, val in logs.items()}
+        return {'loss': loss, 'log': log}
 
     def validation_step(self, batch, batch_idx):
-        return self._train_val_step(batch, batch_idx, 'val')
+        device = (next(self.model.parameters())).device
+        batch.to(device)
+        outputs = self.model(batch)
+        loss = self._compute_loss(outputs, batch)
+        logs = {**compute_perform_metrics(outputs, batch), **{'loss': loss}}
+        log = {key + '/val': val for key, val in logs.items()} 
+        val_outputs = log
+        
+        head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
+        num_steps_attention = len(outputs['att_coefficients'])
+        
+        att_statistics = torch.empty(size=(3,head_factor,num_steps_attention)).cuda()
+        ### attention loss matrix ### 
+        positive_vals = batch.edge_labels.sum()
+        if positive_vals:
+            pos_weight = (batch.edge_labels.shape[0] - positive_vals) / positive_vals
+        else: # If there are no positives labels, avoid dividing by zero
+            pos_weight = 0
+        for step in range(num_steps_attention):
+            for head in range(head_factor):
+                att_statistics[0,head,step] = F.binary_cross_entropy_with_logits(outputs['att_coefficients'][step][head].view(-1),
+                                                                              batch.edge_labels.view(-1),
+                                                                              pos_weight= pos_weight)
+        
+        ### attention loss matrix ###
+        
+        ### attention mean matrix ###
+        for step in range(num_steps_attention):
+            for head in range(head_factor):
+                att_statistics[1,head,step] = torch.mean(outputs['att_coefficients'][step][head].view(-1))
+        ### attention mean matrix ###
 
-    def validation_epoch_end(self, outputs):
-        metrics = pd.DataFrame(outputs).mean(axis=0).to_dict()
+        ### attention variance matrix ###
+        for step in range(num_steps_attention):
+            for head in range(head_factor):
+                att_statistics[2,head,step] = torch.var(outputs['att_coefficients'][step][head].view(-1))        
+        ### attention variance matrix ###
+        val_outputs["att_statistics"] = att_statistics
+        return val_outputs
+
+    def validation_epoch_end(self, val_outputs):
+        att_statistics = 0
+        for out in val_outputs:
+            att_statistics += out["att_statistics"]
+        att_statistics /= len(val_outputs)
+        quantity = ['loss','mean','variance']
+        t = 0
+        for i in quantity:
+            print(i,':',att_statistics[t])
+            t += 1
+
+        metrics = pd.DataFrame(val_outputs).mean(axis=0).to_dict()
         metrics = {metric_name: torch.as_tensor(metric) for metric_name, metric in metrics.items()}
         return {'val_loss': metrics['loss/val'], 'log': metrics}
 
