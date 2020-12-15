@@ -142,7 +142,7 @@ class MOTNeuralSolver(pl.LightningModule):
         head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
         num_steps_attention = len(outputs['att_coefficients'])
         
-        att_statistics = torch.empty(size=(3,head_factor,num_steps_attention)).cuda()
+        att_statistics = torch.empty(size=(5,head_factor,num_steps_attention)).cuda()
         ### attention loss matrix ### 
         positive_vals = batch.edge_labels.sum()
         if positive_vals:
