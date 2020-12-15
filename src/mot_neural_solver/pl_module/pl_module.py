@@ -92,36 +92,35 @@ class MOTNeuralSolver(pl.LightningModule):
             return optimizer
 
     def _compute_loss(self, outputs, batch):
+        att_regu = self.hparams['graph_model_params']['attention']['att_regu']
         # Define Balancing weight
         positive_vals = batch.edge_labels.sum()
-        head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
-        att_regu_strength = self.hparams['train_params']['att_regu_strength']
-        use_attention = self.hparams['graph_model_params']['attention']['use_attention']
         if positive_vals:
             pos_weight = (batch.edge_labels.shape[0] - positive_vals) / positive_vals
-
         else: # If there are no positives labels, avoid dividing by zero
             pos_weight = 0
-
         # Compute Weighted BCE:
         loss_class = 0
         num_steps_class = len(outputs['classified_edges'])
-        if use_attention:
-            num_steps_attention = len(outputs['att_coefficients'])
         for step in range(num_steps_class):
             loss_class += F.binary_cross_entropy_with_logits(outputs['classified_edges'][step].view(-1),
                                                             batch.edge_labels.view(-1),
                                                             pos_weight= pos_weight)
-        if not use_attention:
-            return loss_class
-        att_loss_matrix = torch.empty(size=(head_factor,num_steps_attention)).cuda()
-        for step in range(num_steps_attention):
-            for head in range(head_factor):
-                att_loss_matrix[head,step] = F.binary_cross_entropy_with_logits(outputs['att_coefficients'][step][head].view(-1),
+    
+        if att_regu:
+            loss_att = 0
+            num_steps_attention = len(outputs['att_coefficients'])
+            head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
+            att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
+            for step in range(num_steps_attention):
+                for head in range(head_factor):
+                    loss_att += F.binary_cross_entropy_with_logits(outputs['att_coefficients'][step][head].view(-1),
                                                                               batch.edge_labels.view(-1),
                                                                               pos_weight= pos_weight)
-        att_loss = torch.sum(att_loss_matrix)/head_factor
-        return loss_class + att_regu_strength*att_loss
+            loss_att = loss_att/head_factor
+            return loss_class + att_regu_strength*loss_att
+        return loss_class
+
 
     def _train_val_step(self, batch, batch_idx, train_val):
         device = (next(self.model.parameters())).device
