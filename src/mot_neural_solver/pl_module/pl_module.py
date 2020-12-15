@@ -180,19 +180,21 @@ class MOTNeuralSolver(pl.LightningModule):
                 att_statistics[4,head,step] = torch.max(outputs['att_coefficients'][step][head].view(-1))        
         ### attention maximum matrix ###
         
-        
+        k = 5
+        node_num = 10 
+        nodes = torch.LongTensor([1,2,3,4,5,6,7,8,9,10]).cuda()
         x, idx, edge_attr,label = batch.x, batch.edge_index, batch.edge_attr, batch.edge_labels
         ### topk accuracy matrix ###
         for step in range(num_steps_attention):
             for head in range(head_factor):
                 a = outputs['att_coefficients'][step][head].view(-1)
                 accuracy = 0
-                for center in idx[0][0:10]:
+                for center in nodes:
                     mask = (center == idx[0])
                     a[~mask] = -1 
-                    _, topk_mask = torch.topk(a,5)
+                    _, topk_mask = torch.topk(a,k)
                     accuracy += torch.sum(label[topk_mask])/2
-                accuracy /= 10
+                accuracy /= node_num
                 att_statistics[5,head,step] = accuracy
         val_outputs["att_statistics"] = att_statistics
         ### topk accuracy matrix ###
@@ -202,17 +204,17 @@ class MOTNeuralSolver(pl.LightningModule):
             for head in range(head_factor):
                 a = outputs['att_coefficients'][step][head].view(-1)
                 rate = 0
-                for center in idx[0][0:10]:
+                for center in nodes:
                     mask = (center == idx[0])
                     a[~mask] = -1 
-                    _, topk_mask = torch.topk(a,5)
+                    _, topk_mask = torch.topk(a,k)
                     att_neighbours = idx[1][topk_mask]
-                    dis1 = torch.sum(torch.square(center-x[att_neighbours]))/5
+                    dis1 = torch.sum(torch.square(center-x[att_neighbours]))/k
                     dis2 = torch.norm(center-x[att_neighbours],dim=1,p=None)
-                    value,_ = torch.topk(dis2,5,largest= False)
-                    dis2 = torch.sum(value)/5
+                    value,_ = torch.topk(dis2,k,largest= False)
+                    dis2 = torch.sum(value)/k
                     rate += dis1/dis2
-                rate /= 10
+                rate /= node_num
                 att_statistics[6,head,step] = rate
         val_outputs["att_statistics"] = att_statistics
         ### node embedding difference matrix ###
