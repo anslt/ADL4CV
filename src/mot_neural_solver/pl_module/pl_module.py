@@ -191,7 +191,7 @@ class MOTNeuralSolver(pl.LightningModule):
                     mask = (center == idx[0])
                     a[~mask] = -1 
                     _, topk_mask = torch.topk(a,5)
-                    accuracy += torch.sum(label[topk_mask])/5 
+                    accuracy += torch.sum(label[topk_mask])/2
                 accuracy /= 10
                 att_statistics[5,head,step] = accuracy
         val_outputs["att_statistics"] = att_statistics
