@@ -191,7 +191,7 @@ class MOTNeuralSolver(pl.LightningModule):
                     mask = (center == idx[0])
                     a[~mask] = -1 
                     _, topk_mask = torch.topk(a,5)
-                    accuracy += torch.sum(label[topk_mask])/2 
+                    accuracy += torch.sum(label[topk_mask])/5 
                 accuracy /= 10
                 att_statistics[5,head,step] = accuracy
         val_outputs["att_statistics"] = att_statistics
@@ -209,10 +209,11 @@ class MOTNeuralSolver(pl.LightningModule):
                     att_neighbours = idx[1][topk_mask]
                     dis1 = torch.sum(torch.square(center-x[att_neighbours]))/5
                     dis2 = torch.norm(center-x[att_neighbours],dim=1,p=None)
-                    value,_ = torch.topk(dis2,5)
-                    dis2 = torch.sum(value)
+                    value,_ = torch.topk(dis2,5,largest= False)
+                    dis2 = torch.sum(value)/5
                     rate += dis1/dis2
                 rate /= 10
+                att_statistics[6,head,step] = rate
         val_outputs["att_statistics"] = att_statistics
         ### node embedding difference matrix ###
         return val_outputs
