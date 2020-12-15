@@ -153,8 +153,7 @@ class MOTNeuralSolver(pl.LightningModule):
             for head in range(head_factor):
                 att_statistics[0,head,step] = F.binary_cross_entropy_with_logits(outputs['att_coefficients'][step][head].view(-1),
                                                                               batch.edge_labels.view(-1),
-                                                                              pos_weight= pos_weight)
-        
+                                                                              pos_weight= pos_weight)  
         ### attention loss matrix ###
         
         ### attention mean matrix ###
@@ -168,6 +167,19 @@ class MOTNeuralSolver(pl.LightningModule):
             for head in range(head_factor):
                 att_statistics[2,head,step] = torch.var(outputs['att_coefficients'][step][head].view(-1))        
         ### attention variance matrix ###
+
+        ### attention minimum matrix ###
+        for step in range(num_steps_attention):
+            for head in range(head_factor):
+                att_statistics[3,head,step] = torch.min(outputs['att_coefficients'][step][head].view(-1))        
+        ### attention minimum matrix ###
+        
+        ### attention maximum matrix ###
+        for step in range(num_steps_attention):
+            for head in range(head_factor):
+                att_statistics[4,head,step] = torch.max(outputs['att_coefficients'][step][head].view(-1))        
+        ### attention maximum matrix ###
+
         val_outputs["att_statistics"] = att_statistics
         return val_outputs
 
@@ -176,7 +188,7 @@ class MOTNeuralSolver(pl.LightningModule):
         for out in val_outputs:
             att_statistics += out["att_statistics"]
         att_statistics /= len(val_outputs)
-        quantity = ['loss','mean','variance']
+        quantity = ['loss','mean','variance','min','max']
         t = 0
         for i in quantity:
             print(i,':',att_statistics[t])
