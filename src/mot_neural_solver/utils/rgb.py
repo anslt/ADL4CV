@@ -122,7 +122,7 @@ def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda)
     #print("EMBEDDINGS PATH IS ", embeddings_path)
     frames_to_retrieve = sorted(det_df.frame.unique())
     embeddings_list = []
-    embeddings_size_list = []
+    frames_list = []
     for frame_num in frames_to_retrieve:
         embedding = torch.load(osp.join(embeddings_path, f"{frame_num}.pt"))
         embedding_size = embedding.size() 
@@ -134,13 +134,15 @@ def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda)
 
     # First column in embeddings is the index. Drop the rows of those that are not present in det_df
     ixs_to_drop = list(set(embeddings[:, 0].int().numpy()) - set(det_df['detection_id']))
-    embeddings = embeddings[~np.isin(embeddings[:, 0], ixs_to_drop)]  # Not so clean, but faster than a join
+    mask = ~np.isin(embeddings[:, 0], ixs_to_drop)
+    embeddings = embeddings[mask]  # Not so clean, but faster than a join
+    frames = frames[mask]
     assert_str = "Problems loading embeddings. Indices between query and stored embeddings do not match. BOTH SHOULD BE SORTED!"
     assert (embeddings[:, 0].numpy() == det_df['detection_id'].values).all(), assert_str
 
     detection_id = embeddings[:,0]
     embeddings = embeddings[:, 1:]  # Get rid of the detection index
 
-    return embeddings.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")),
-        frames.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")),
+    return embeddings.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")), \
+        frames.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")), \
         detection_id.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))

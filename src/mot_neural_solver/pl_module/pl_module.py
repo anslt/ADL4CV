@@ -125,10 +125,12 @@ class MOTNeuralSolver(pl.LightningModule):
         device = (next(self.model.parameters())).device
         batch.to(device)
 
-        print(batch.graph_size)
-        print(batch.x.size())
-        print(batch.frame.size())
-        print(batch.id.size())
+        #print(batch.graph_size)
+        #print(batch.x.size())
+        #print(batch.frame.size())
+        #print(batch.tracking_id.size())
+        #print(batch.frame)
+        #print(batch.tracking_id)
 
         outputs = self.model(batch)
         loss = self._compute_loss(outputs, batch)
