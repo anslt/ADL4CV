@@ -124,6 +124,12 @@ class MOTNeuralSolver(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         device = (next(self.model.parameters())).device
         batch.to(device)
+
+        print(batch.graph_size)
+        print(batch.x.size())
+        print(batch.frame.size())
+        print(batch.id.size())
+
         outputs = self.model(batch)
         loss = self._compute_loss(outputs, batch)
         logs = {**compute_perform_metrics(outputs, batch), **{'loss': loss}}

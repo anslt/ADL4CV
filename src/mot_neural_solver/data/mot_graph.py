@@ -33,7 +33,10 @@ class Graph(Data):
                            'node_names', # Node names (integer values)
                            'edge_labels', # Edge labels according to Network Flow MOT formulation
                            'edge_preds', # Predicted approximation to edge labels
-                           'reid_emb_dists'] # Reid distance for each edge
+                           'reid_emb_dists', # Reid distance for each edge
+                           'frame',
+                           'id',
+                           'graph_size']
 
         for attr_name in _data_attr_names:
             if hasattr(self, attr_name):
@@ -148,6 +151,8 @@ class MOTGraph(object):
         Returns:
             tuple with (reid embeddings, node_feats), both are torch.tensors with shape (num_nodes, embed_dim)
         """
+        node_size = None
+        node_id = None
         if self.inference_mode and not self.dataset_params['precomputed_embeddings']:
             assert self.cnn_model is not None
             print("USING CNN FOR APPEARANCE")
@@ -159,20 +164,23 @@ class MOTGraph(object):
                                                                     use_cuda = self.inference_mode)
 
         else:
-            reid_embeds = load_precomputed_embeddings(det_df=self.graph_df,
+            reid_embeds, reid_size, reid_id = load_precomputed_embeddings(det_df=self.graph_df,
                                                       seq_info_dict=self.seq_info_dict,
                                                       embeddings_dir=self.dataset_params['reid_embeddings_dir'],
                                                       use_cuda=self.inference_mode)
             if self.dataset_params['reid_embeddings_dir'] == self.dataset_params['node_embeddings_dir']:
                 node_feats = reid_embeds.clone()
+                node_size = reid_size
+                node_id = reid_id
 
             else:
-                node_feats = load_precomputed_embeddings(det_df=self.graph_df,
+                node_feats, node_size, node_id = load_precomputed_embeddings(det_df=self.graph_df,
                                                           seq_info_dict=self.seq_info_dict,
                                                           embeddings_dir=self.dataset_params['node_embeddings_dir'],
                                                           use_cuda=self.inference_mode)
 
-        return reid_embeds, node_feats
+        ### onlyt work for pre-computed node
+        return reid_embeds, node_feats, node_size, node_id
 
     def _get_edge_ixs(self, reid_embeddings):
         """
@@ -258,7 +266,7 @@ class MOTGraph(object):
         Constructs the entire Graph object to serve as input to the MPN, and stores it in self.graph_obj,
         """
         # Load Appearance Data
-        reid_embeddings, node_feats = self._load_appearance_data()
+        reid_embeddings, node_feats, node_frames, node_id = self._load_appearance_data()
 
         # Determine graph connectivity (i.e. edges) and compute edge features
         edge_ixs, edge_feats_dict = self._get_edge_ixs(reid_embeddings)
@@ -288,6 +296,9 @@ class MOTGraph(object):
                                edge_attr = torch.cat((edge_feats, edge_feats), dim = 0),
                                edge_index = torch.cat((edge_ixs, torch.stack((edge_ixs[1], edge_ixs[0]))), dim=1))
 
+        self.graph_obj.frame = node_frames
+        self.graph_obj.id = node_id
+        self.graph_obj.graph_size = torch.IntTensor([node_id.size()[0]])
         if self.inference_mode:
             self.graph_obj.reid_emb_dists = torch.cat((emb_dists, emb_dists))
 
