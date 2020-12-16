@@ -164,23 +164,23 @@ class MOTGraph(object):
                                                                     use_cuda = self.inference_mode)
 
         else:
-            reid_embeds, reid_size, reid_id = load_precomputed_embeddings(det_df=self.graph_df,
+            reid_embeds, reid_frames, reid_id = load_precomputed_embeddings(det_df=self.graph_df,
                                                       seq_info_dict=self.seq_info_dict,
                                                       embeddings_dir=self.dataset_params['reid_embeddings_dir'],
                                                       use_cuda=self.inference_mode)
             if self.dataset_params['reid_embeddings_dir'] == self.dataset_params['node_embeddings_dir']:
                 node_feats = reid_embeds.clone()
-                node_size = reid_size
+                node_frames = reid_frames
                 node_id = reid_id
 
             else:
-                node_feats, node_size, node_id = load_precomputed_embeddings(det_df=self.graph_df,
+                node_feats, node_frames, node_id = load_precomputed_embeddings(det_df=self.graph_df,
                                                           seq_info_dict=self.seq_info_dict,
                                                           embeddings_dir=self.dataset_params['node_embeddings_dir'],
                                                           use_cuda=self.inference_mode)
 
         ### onlyt work for pre-computed node
-        return reid_embeds, node_feats, node_size, node_id
+        return reid_embeds, node_feats, node_frames, node_id
 
     def _get_edge_ixs(self, reid_embeddings):
         """
