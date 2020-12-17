@@ -73,7 +73,7 @@ def main(_config, _run):
                       max_epochs=_config['train_params']['num_epochs'],
                       val_percent_check = _config['eval_params']['val_percent_check'],
                       check_val_every_n_epoch=_config['eval_params']['check_val_every_n_epoch'],
-                      nb_sanity_val_steps=0,
+                      nb_sanity_val_steps=1,
                       logger =logger,
                       default_save_path=osp.join(OUTPUT_PATH, 'experiments', run_str))
     trainer.fit(model)
