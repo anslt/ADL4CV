@@ -161,7 +161,7 @@ class MOTNeuralSolver(pl.LightningModule):
         k = 5
         x, idx, edge_attr,label,time,identity = batch.x, batch.edge_index, batch.edge_attr, batch.edge_labels, batch.frame, batch.tracking_id
         time = time.float()
-        centers = torch.unique(idx)
+        centers = torch.unique(idx[0])
         centers = centers[0:100]
         center_num = len(centers)
         for step in range(num_steps_attention):
