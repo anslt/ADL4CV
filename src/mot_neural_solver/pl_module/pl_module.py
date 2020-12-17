@@ -150,91 +150,106 @@ class MOTNeuralSolver(pl.LightningModule):
         head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
         num_steps_attention = len(outputs['att_coefficients'])
         
-        att_statistics = torch.empty(size=(7,head_factor,num_steps_attention)).cuda()
-        ### attention loss matrix ### 
+        
+        
+        att_statistics = torch.empty(size=(13,head_factor,num_steps_attention)).cuda()
         positive_vals = batch.edge_labels.sum()
         if positive_vals:
             pos_weight = (batch.edge_labels.shape[0] - positive_vals) / positive_vals
         else: # If there are no positives labels, avoid dividing by zero
             pos_weight = 0
+        k = 5
+        x, idx, edge_attr,label,time,identity = batch.x, batch.edge_index, batch.edge_attr, batch.edge_labels, batch.frame, batch.tracking_id
+        time = time.float()
+        centers = torch.unique(idx)
+        centers = centers[0:100]
+        center_num = len(centers)
         for step in range(num_steps_attention):
             for head in range(head_factor):
+                a = outputs['att_coefficients'][step][head].view(-1)
+                ### attention loss matrix ### 
                 att_statistics[0,head,step] = F.binary_cross_entropy_with_logits(outputs['att_coefficients'][step][head].view(-1),
                                                                               batch.edge_labels,
                                                                               pos_weight= pos_weight) 
-        ### attention loss matrix ###
-        
-        ### attention mean matrix ###
-        for step in range(num_steps_attention):
-            for head in range(head_factor):
+                ### attention loss matrix ### 
+                ### attention mean matrix ###
                 att_statistics[1,head,step] = torch.mean(outputs['att_coefficients'][step][head].view(-1))
-        ### attention mean matrix ###
-
-        ### attention variance matrix ###
-        for step in range(num_steps_attention):
-            for head in range(head_factor):
-                att_statistics[2,head,step] = torch.var(outputs['att_coefficients'][step][head].view(-1))        
-        ### attention variance matrix ###
-
-        ### attention minimum matrix ###
-        for step in range(num_steps_attention):
-            for head in range(head_factor):
+                ### attention mean matrix ###
+                ### attention variance matrix ###
+                att_statistics[2,head,step] = torch.var(outputs['att_coefficients'][step][head].view(-1))  
+                ### attention variance matrix ###
+                ### attention minimum matrix ###
                 att_statistics[3,head,step] = torch.min(outputs['att_coefficients'][step][head].view(-1))        
-        ### attention minimum matrix ###
-        
-        ### attention maximum matrix ###
-        for step in range(num_steps_attention):
-            for head in range(head_factor):
+                ### attention minimum matrix ###
+                ### attention maximum matrix ###
                 att_statistics[4,head,step] = torch.max(outputs['att_coefficients'][step][head].view(-1))        
-        ### attention maximum matrix ###
-        
-        k = 5
-        node_num = 10 
-        nodes = torch.LongTensor([1,2,3,4,5,6,7,8,9,10]).cuda()
-        x, idx, edge_attr,label = batch.x, batch.edge_index, batch.edge_attr, batch.edge_labels
-        ### topk accuracy matrix ###
-        for step in range(num_steps_attention):
-            for head in range(head_factor):
-                a = outputs['att_coefficients'][step][head].view(-1)
+                ### attention maximum matrix ###
                 accuracy = 0
-                for center in nodes:
+                dis_rate = 0
+                time_rate = 0
+                same = 0
+                mins = torch.empty(size=(center_num,))
+                maxs = torch.empty(size=(center_num,))
+                count = 0
+                for center in centers:
                     mask = (center == idx[0])
-                    a[~mask] = -1 
-                    _, topk_mask = torch.topk(a,k)
-                    accuracy += torch.sum(label[topk_mask])/2
-                accuracy /= node_num
-                att_statistics[5,head,step] = accuracy
-        val_outputs["att_statistics"] = att_statistics
-        ### topk accuracy matrix ###
-        
-        ### node embedding difference matrix ###
-        for step in range(num_steps_attention):
-            for head in range(head_factor):
-                a = outputs['att_coefficients'][step][head].view(-1)
-                rate = 0
-                for center in nodes:
-                    mask = (center == idx[0])
-                    a[~mask] = -1 
-                    _, topk_mask = torch.topk(a,k)
-                    att_neighbours = idx[1][topk_mask]
-                    dis1 = torch.sum(torch.square(center-x[att_neighbours]))/k
-                    dis2 = torch.norm(center-x[att_neighbours],dim=1,p=None)
+                    b = a.clone()
+                    b[~mask] = -1 
+                    _, high_topk_mask = torch.topk(b,k)                         # boolean tensor [M,] M: number of edges
+                    high_topk_neighbors = idx[1][high_topk_mask]                # Long tensor [k,] 
+                    
+                    c = a.clone()
+                    c[~mask] = 2
+                    _, low_topk_mask = torch.topk(c,k,largest= False)
+                    low_topk_neighbors = idx[1][low_topk_mask]
+                    ### min mean, min var, max mean, max var###
+                    mins[count] = torch.min(a[mask])
+                    maxs[count] = torch.max(a[mask])
+                    count += 1
+                    ### min mean, min var, max mean, max var###
+                    ### topk accuracy ###
+                    accuracy += torch.sum(label[high_topk_mask])/2
+                    ### topk accuarcy ###                
+                    ### trajectory ###
+                    same += torch.sum(identity[center] == identity[high_topk_neighbors])/k
+                    ### trajectory ###
+                    ### node embedding ###                    
+                    dis1 = torch.sum(torch.norm(x[center]-x[high_topk_neighbors],dim=1))
+                    dis2 = torch.norm(x[center]-x[torch.arange(x.size(0))!=center],dim=1,p=None) 
                     value,_ = torch.topk(dis2,k,largest= False)
-                    dis2 = torch.sum(value)/k
-                    rate += dis1/dis2
-                rate /= node_num
-                att_statistics[6,head,step] = rate
+                    dis2 = torch.sum(value)
+                    dis_rate += dis1/dis2
+                    ### node embedding ###
+                    ### time ###
+                    time_diff_high = torch.mean(torch.abs(time[center]-time[high_topk_neighbors]))
+                    time_diff_low = torch.mean(torch.abs(time[center]-time[low_topk_neighbors]))
+                    time_rate += time_diff_high/time_diff_low
+                    ### time ###
+                    
+                att_statistics[5,head,step] = torch.mean(mins)
+                att_statistics[6,head,step] = torch.var(mins)
+                att_statistics[7,head,step] = torch.mean(maxs)
+                att_statistics[8,head,step] = torch.var(maxs)             
+                accuracy /= center_num
+                att_statistics[9,head,step] = accuracy
+                same /= center_num
+                att_statistics[10,head,step] = same
+                dis_rate /= center_num
+                att_statistics[11,head,step] = dis_rate
+                time_rate /= center_num
+                att_statistics[12,head,step] = time_rate
+                
         val_outputs["att_statistics"] = att_statistics
-        ### node embedding difference matrix ###
         return val_outputs
 
     def validation_epoch_end(self, val_outputs):
         att_statistics = val_outputs[-1]["att_statistics"]
-        quantity = ['loss','mean','variance','min','max','topk accuracy','emb_diff']
+        quantity = ['loss','mean','variance','min','max','min mean', 'min var', 'max mean', 'max var','topk accuracy','trajectory','emb_diff','time']
         t = 0
         for i in quantity:
             print(i,':',att_statistics[t])
             t += 1
+        
         metrics = pd.DataFrame(val_outputs).mean(axis=0).to_dict()
         metrics = {metric_name: torch.as_tensor(metric) for metric_name, metric in metrics.items()}
         return {'val_loss': metrics['loss/val'], 'log': metrics}
