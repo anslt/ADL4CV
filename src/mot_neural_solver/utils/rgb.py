@@ -140,9 +140,7 @@ def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda)
     assert_str = "Problems loading embeddings. Indices between query and stored embeddings do not match. BOTH SHOULD BE SORTED!"
     assert (embeddings[:, 0].numpy() == det_df['detection_id'].values).all(), assert_str
 
-    detection_id = embeddings[:,0]
     embeddings = embeddings[:, 1:]  # Get rid of the detection index
 
     return embeddings.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")), \
-        frames.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")), \
-        detection_id.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))
+        frames.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))

@@ -259,6 +259,7 @@ class MOTGraph(object):
         active_edge_ixs = same_ids_ixs[0][past_edge_is_active | fut_edge_is_active]
         self.graph_obj.edge_labels = torch.zeros_like(same_id, dtype = torch.float)
         self.graph_obj.edge_labels[active_edge_ixs] = 1
+        self.graph_obj.tracking_id = ids
 
 
     def construct_graph_object(self):
@@ -266,7 +267,7 @@ class MOTGraph(object):
         Constructs the entire Graph object to serve as input to the MPN, and stores it in self.graph_obj,
         """
         # Load Appearance Data
-        reid_embeddings, node_feats, node_frames, node_id = self._load_appearance_data()
+        reid_embeddings, node_feats, node_frames = self._load_appearance_data()
 
         # Determine graph connectivity (i.e. edges) and compute edge features
         edge_ixs, edge_feats_dict = self._get_edge_ixs(reid_embeddings)
