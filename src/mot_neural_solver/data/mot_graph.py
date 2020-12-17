@@ -298,7 +298,7 @@ class MOTGraph(object):
                                edge_index = torch.cat((edge_ixs, torch.stack((edge_ixs[1], edge_ixs[0]))), dim=1))
 
         self.graph_obj.frame = node_frames
-        self.graph_obj.graph_size = torch.IntTensor([node_id.size()[0]])
+        self.graph_obj.graph_size = torch.IntTensor([node_frames.size()[0]])
         if self.inference_mode:
             self.graph_obj.reid_emb_dists = torch.cat((emb_dists, emb_dists))
 
