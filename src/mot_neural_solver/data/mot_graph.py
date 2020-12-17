@@ -180,7 +180,7 @@ class MOTGraph(object):
                                                           use_cuda=self.inference_mode)
 
         ### onlyt work for pre-computed node
-        return reid_embeds, node_feats, node_frames, node_id
+        return reid_embeds, node_feats, node_frames
 
     def _get_edge_ixs(self, reid_embeddings):
         """
