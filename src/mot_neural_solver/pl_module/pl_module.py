@@ -106,34 +106,29 @@ class MOTNeuralSolver(pl.LightningModule):
             loss_class += F.binary_cross_entropy_with_logits(outputs['classified_edges'][step].view(-1),
                                                             batch.edge_labels.view(-1),
                                                             pos_weight= pos_weight)
-    
+        
+        att_loss_matrix = None
         if att_regu:
-            loss_att = 0
             num_steps_attention = len(outputs['att_coefficients'])
             head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
             att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
+            att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
             for step in range(num_steps_attention):
                 for head in range(head_factor):
-                    loss_att += F.binary_cross_entropy_with_logits(outputs['att_coefficients'][step][head].view(-1),
-                                                                              batch.edge_labels.view(-1),
-                                                                              pos_weight= pos_weight)
-            loss_att = loss_att/head_factor
-            return loss_class + att_regu_strength*loss_att
-        return loss_class
+                    att_loss_matrix[head, step] = F.binary_cross_entropy_with_logits(
+                        outputs['att_coefficients'][step][head].view(-1),
+                        batch.edge_labels.view(-1),
+                        pos_weight=pos_weight)
+            att_loss = torch.sum(att_loss_matrix) / head_factor
+        return {"loss": loss_class + att_regu_strength * att_loss , "loss_class": loss_class, "loss_matrix" : att_loss_matrix}
 
     def training_step(self, batch, batch_idx):
         device = (next(self.model.parameters())).device
         batch.to(device)
 
-        #print(batch.graph_size)
-        #print(batch.x.size())
-        #print(batch.frame.size())
-        #print(batch.tracking_id.size())
-        #print(batch.frame)
-        #print(batch.tracking_id)
-
         outputs = self.model(batch)
-        loss = self._compute_loss(outputs, batch)
+        loss_dic = self._compute_loss(outputs, batch)
+        loss = loss_dic["loss"]
         logs = {**compute_perform_metrics(outputs, batch), **{'loss': loss}}
         log = {key + '/train': val for key, val in logs.items()}
         return {'loss': loss, 'log': log}
@@ -145,7 +140,7 @@ class MOTNeuralSolver(pl.LightningModule):
         loss = self._compute_loss(outputs, batch)
         logs = {**compute_perform_metrics(outputs, batch), **{'loss': loss}}
         log = {key + '/val': val for key, val in logs.items()} 
-        val_outputs = log
+        val_outputs["log"] = log
         
         head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
         num_steps_attention = len(outputs['att_coefficients'])
@@ -211,7 +206,7 @@ class MOTNeuralSolver(pl.LightningModule):
                     accuracy += torch.sum(label[high_topk_mask])/2
                     ### topk accuarcy ###                
                     ### trajectory ###
-                    same += torch.sum(identity[center] == identity[high_topk_neighbors])/k
+                    same += torch.sum(identity[center] == identity[high_topk_neighbors]) > 0
                     ### trajectory ###
                     ### node embedding ###                    
                     dis1 = torch.sum(torch.norm(x[center]-x[high_topk_neighbors],dim=1))
