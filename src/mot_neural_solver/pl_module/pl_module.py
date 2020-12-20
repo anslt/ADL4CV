@@ -114,9 +114,9 @@ class MOTNeuralSolver(pl.LightningModule):
             att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
             for step in range(num_steps_attention):
                 for head in range(head_factor):
-                    loss_att += F.binary_cross_entropy_with_logits(outputs['att_coefficients'][step][head].view(-1),
-                                                                              batch.edge_labels.view(-1),
-                                                                              pos_weight= pos_weight)
+                    a = outputs['att_coefficients'][step][head].view(-1)
+                    aa = torch.min(aa,torch.full(a.shape,1).cuda())
+                    loss_att += F.binary_cross_entropy(aa,batch.edge_labels.view(-1))
             loss_att = loss_att/head_factor
             return loss_class + att_regu_strength*loss_att
         return loss_class
@@ -153,11 +153,6 @@ class MOTNeuralSolver(pl.LightningModule):
         
         
         att_statistics = torch.empty(size=(13,head_factor,num_steps_attention)).cuda()
-        positive_vals = batch.edge_labels.sum()
-        if positive_vals:
-            pos_weight = (batch.edge_labels.shape[0] - positive_vals) / positive_vals
-        else: # If there are no positives labels, avoid dividing by zero
-            pos_weight = 0
         k = 5
         x, idx, edge_attr,label,time,identity = batch.x, batch.edge_index, batch.edge_attr, batch.edge_labels, batch.frame, batch.tracking_id
         time = time.float()
@@ -168,9 +163,8 @@ class MOTNeuralSolver(pl.LightningModule):
             for head in range(head_factor):
                 a = outputs['att_coefficients'][step][head].view(-1)
                 ### attention loss matrix ### 
-                att_statistics[0,head,step] = F.binary_cross_entropy_with_logits(outputs['att_coefficients'][step][head].view(-1),
-                                                                              batch.edge_labels,
-                                                                              pos_weight= pos_weight) 
+                aa = torch.min(aa,torch.full(a.shape,1).cuda())
+                att_statistics[0,head,step] = F.binary_cross_entropy(aa,batch.edge_labels.view(-1)) 
                 ### attention loss matrix ### 
                 ### attention mean matrix ###
                 att_statistics[1,head,step] = torch.mean(outputs['att_coefficients'][step][head].view(-1))
