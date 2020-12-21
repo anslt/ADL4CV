@@ -89,8 +89,13 @@ class AttentionModel(nn.Module):
     def forward(self, x,row,col):
         xx = torch.cat([x[row], x[col]], dim=1)                                                          # cat([M,d=32],[M,d=32])->[M,d=64]
         e = self.leakyrelu(torch.matmul(self.aa,xx.T))                                                   # [k,64]*[64,M]->[k,M]
-        a = torch_scatter.composite.scatter_softmax(e,row, dim=1, eps=1e-12)                             # [k,M]->[k,M]
-        return a
+        flow_out = row < col
+        flow_in = row > col
+
+        a_out =  torch_scatter.composite.scatter_softmax(e*flow_out,row, dim=1, eps=1e-12)
+        a_in = torch_scatter.composite.scatter_softmax(e*flow_in,row, dim=1, eps=1e-12)                   # [k,M]->[k,M]
+
+        return a_in + a_out
 
 class TimeAwareNodeModel(nn.Module):
     """
