@@ -256,7 +256,7 @@ class MOTNeuralSolver(pl.LightningModule):
 
                     if ind_i.shape[0] >= topk:
                         cal_num += torch.sum(labels[ind_i+temp])
-                        num += torch.any(row[ind_i+temp] > col[ind_i+temp]) + torch.any(row[ind_i+temp] < col[ind_i+temp])
+                        num += torch.any(row[ind_i+temp] > col[ind_i+temp]).type(torch.FloatTensor) + torch.any(row[ind_i+temp] < col[ind_i+temp]).type(torch.FloatTensor)
                         ind_topk = ind_i[range(topk)] + temp
                         val_topk = val_i[range(topk)]
                         val_res += torch.cumsum(val_topk, dim=0)
@@ -334,7 +334,7 @@ class MOTNeuralSolver(pl.LightningModule):
             tracking_exists_topk /= cal_edge_num
             tracking_percentage_topk /= cal_edge_num * torch.cumsum(torch.FloatTensor(np.arange(self.hparams['visual']['topk'])+1), dim=0).to(attention.device).unsqueeze(0)
 
-            print("Epoch:"+str(self.validation_epoch))
+            print("\nEpoch:"+str(self.validation_epoch))
             print(loss)
             print(torch.stack(loss, dim=0).mean())
             print(val_res_step)
@@ -404,6 +404,7 @@ class MOTNeuralSolver(pl.LightningModule):
                 file = path+file
             plt.savefig(file)
             #plt.show()
+            plt.close()
 
     def track_all_seqs(self, output_files_dir, dataset, use_gt = False, verbose = False):
         tracker = MPNTracker(dataset=dataset,

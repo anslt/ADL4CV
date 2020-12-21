@@ -35,7 +35,7 @@ class Graph(Data):
                            'edge_preds', # Predicted approximation to edge labels
                            'reid_emb_dists', # Reid distance for each edge
                            'frame',
-                           'id',
+                           'tracking_id',
                            'graph_size']
 
         for attr_name in _data_attr_names:
