@@ -1,4 +1,4 @@
-import osimport os
+import os
 import os.path as osp
 
 import pandas as pd
@@ -206,7 +206,7 @@ class MOTNeuralSolver(pl.LightningModule):
 
             for k in range(step_size):
                 
-                cal_num = 0 
+                #cal_num = 0 
                 val_res = torch.zeros(topk)
                 
                 for i in range(output.size(0)):
@@ -220,7 +220,7 @@ class MOTNeuralSolver(pl.LightningModule):
                     val_i, ind_i = torch.sort(attack_i, descending=True)
 
                     if ind_i.shape[0] >= topk:
-                        cal_num += torch.sum(labels[ind_i+temp])
+                        #cal_num += torch.sum(labels[ind_i+temp])
                         val_topk = val_i[range(topk)]
                         val_res += torch.cumsum(val_topk, dim=0) 
                 
@@ -256,10 +256,10 @@ class MOTNeuralSolver(pl.LightningModule):
 
                     if ind_i.shape[0] >= topk:
                         cal_num += torch.sum(labels[ind_i+temp])
-                        num += 2
+                        num += torch.any(row[ind_i+temp] > col[ind_i+temp]) + torch.any(row[ind_i+temp] < col[ind_i+temp])
                         ind_topk = ind_i[range(topk)] + temp
                         val_topk = val_i[range(topk)]
-                        val_res += torch.cumsum(val_topk, dim=0) / summation 
+                        val_res += torch.cumsum(val_topk, dim=0)
 
                         labels_i_topk = torch.cumsum(labels[ind_topk], dim=0)
                         exists_topk += labels_i_topk
@@ -271,8 +271,8 @@ class MOTNeuralSolver(pl.LightningModule):
                         
                         val_res_mean_last[k] = val_res
                         exists_topk_mean_last[k] = exists_topk
-                        tracking_topk_exists_mean_last[k] = tracking_exists_topk
-                        tracking_topk_percentage_mean_last[k] = tracking_percentage_topk
+                        tracking_exists_topk_mean_last[k] = tracking_exists_topk
+                        tracking_percentage_topk_mean_last[k] = tracking_percentage_topk
 
             
             
@@ -281,8 +281,8 @@ class MOTNeuralSolver(pl.LightningModule):
             val_outputs["val_res_step"] = val_res_step.to(device)
             val_outputs["val_res"] = val_res_mean_last.to(device)
             val_outputs["exists_topk"] = exists_topk_mean_last.to(device)
-            val_outputs["tracking_exists_topk"] = tracking_topk_exists_mean_last.to(device)
-            val_outputs["tracking_percentage_topk"] = tracking_topk_percentage_mean_last.to(device)
+            val_outputs["tracking_exists_topk"] = tracking_exists_topk_mean_last.to(device)
+            val_outputs["tracking_percentage_topk"] = tracking_percentage_topk_mean_last.to(device)
             
         return val_outputs
 
@@ -324,12 +324,15 @@ class MOTNeuralSolver(pl.LightningModule):
                 exists_topk += val_output["exists_topk"]
                 tracking_exists_topk += val_output["tracking_exists_topk"]
                 tracking_percentage_topk += val_output["tracking_percentage_topk"]
+            
+            edge_attr = torch.cat(edge_attr, dim = 0)
+            attention = torch.cat(attention, dim = 0)
 
             val_res_step /= edge_num
             val_res /= edge_num
             exists_topk /= cal_edge_num
             tracking_exists_topk /= cal_edge_num
-            tracking_percentage_topk /= cal_edge_num * torch.cumsum(torch.FloatTensor(np.arange(topk)+1), dim=0).to(attention.device).unsqueeze(0)
+            tracking_percentage_topk /= cal_edge_num * torch.cumsum(torch.FloatTensor(np.arange(self.hparams['visual']['topk'])+1), dim=0).to(attention.device).unsqueeze(0)
 
             print("Epoch:"+str(self.validation_epoch))
             print(loss)
@@ -347,8 +350,6 @@ class MOTNeuralSolver(pl.LightningModule):
             np.save(path+"tracking_exists_topk_"+str(self.validation_epoch)+".npy",tracking_exists_topk.detach().cpu().numpy())
             np.save(path+"tracking_percentage_topk_"+str(self.validation_epoch)+".npy",tracking_percentage_topk.detach().cpu().numpy())
 
-            edge_attr = torch.cat(edge_attr, dim = 0)
-            attention = torch.cat(attention, dim = 0)
             self._plot(edge_attr.cpu(), attention.cpu(), self.validation_epoch, path, 'last')
             self._plot(edge_attr.cpu(), attention.cpu(), self.validation_epoch, path, 'mean')
 
