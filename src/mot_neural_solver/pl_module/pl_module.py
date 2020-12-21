@@ -155,16 +155,112 @@ class MOTNeuralSolver(pl.LightningModule):
             val_outputs["loss_matrix"] = loss_dic["loss_matrix"].detach()
             val_outputs["loss_class"] = loss_dic["loss_class"].detach()
             val_outputs["loss"] = loss_dic["loss"].detach()
-            val_outputs["num"] = batch.edge_attr.size()[0]
+            val_outputs["node_num"] = batch.x.size(0)
+
             attention = torch.stack(outputs['att_coefficients'], dim=0).detach().permute(2,1,0)
             val_outputs["attention"] = attention
 
             head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
             num_steps_attention = len(outputs['att_coefficients'])
             
+
+            edge_id = batch.edge_index.detach().transpose(0,1).contingous()
+            attr = val_outputs["edge_attr"]
+            labels = betch.labels.detach()
+
+            topk = self.hparams['visual']['topk']
+            path = self.hparams['visual']['path']
+            row = edge_id[:,0]
+            col = edge_id[:,1]
+
+            _, ind = torch.sort(row)
+
+            edge_id = edge_id[ind]
+            attention = attention[ind]
+            attr = attr[ind]
+            labels = labels[ind]
+
+            row = edge_id[:,0]
+            col = edge_id[:,1]
+
+            output, count = torch.unique_consecutive(row,return_counts=True)
+            cum_count = torch.cumsum(count, dim=0)
+
+            attention_step = attention.mean(dim=1)
+
+            step_size = attention_step.size(1)
+            val_res_step = torch.zeros(step_size,topk).to(attention.device)
+
+            for k in range(step_size):
+                
+                #cal_num = 0 
+                val_res = torch.zeros(topk)
+                
+                for i in range(output.size(0)):
+
+                    if i == 0:
+                        attack_i = attention_step[range(cum_count[i]),k]
+                        temp = 0
+                    else:
+                        attack_i = attention_step[range(cum_count[i-1],cum_count[i]),k]
+                        temp = cum_count[i-1]
+                    val_i, ind_i = torch.sort(attack_i, descending=True)
+
+                    if ind_i.shape[0] >= topk:
+                        #cal_num += 1
+                        val_topk = val_i[range(topk)]
+                        val_res += torch.cumsum(val_topk, dim=0)
+                
+                val_res_step[k,:] = val_res
+
+            attention_mean_last = [attention.mean(dim=[1,2]), attention[:,:,-1].mean(-1)]
+
+            val_res_mean_last = torch.zeros(2,topk).to(attention.device)
+            exists_topk_mean_last = torch.zeros(2,topk).to(attention.device)
+            tracking_topk_mean_last = torch.zeros(2,topk).to(attention.device)
+
+            for k, attention0 in enumerate(attention_mean_last):
+                
+                                               ### set
+                val_res = torch.zeros(topk)
+                exists_topk = torch.zeros(topk)
+                percentage_topk = torch.zeros(topk)
+                tracking_topk = torch.zeros(topk)
+
+                for i in range(output.size(0)):
+
+                    if i == 0:
+                        attack_i = attention0[range(cum_count[i])]
+                        temp = 0
+                    else:
+                        attack_i = attention0[range(cum_count[i-1],cum_count[i])]
+                        temp = cum_count[i-1]
+                    val_i, ind_i = torch.sort(attack_i, descending=True)
+
+                    if ind_i.shape[0] >= topk:
+                        cal_num += 1
+                        ind_topk = ind_i[range(topk)] + temp
+                        val_topk = val_i[range(topk)]
+                        val_res += torch.cumsum(val_topk, dim=0)
+
+                        labels_i_topk = torch.cumsum(labels[ind_topk], dim=0)
+                        exists_topk += labels_i_topk
+
+                        tracking_i = idx[output[i].type(torch.LongTensor)] == idx[col[ind_topk].type(torch.LongTensor)]
+                        tracking_i_cumsum = torch.cumsum(tracking_i, dim=0)
+                        tracking_topk += tracking_i_cumsum > 0
+                        
+                        val_res_mean_last[k] = val_res
+                        exists_topk_mean_last[k] = exists_topk
+                        tracking_topk_mean_last[k] = tracking_topk
+
             
             
-            val_outputs["cal_num"] = cal_num
+            val_outputs["edge_num"] = cal_num
+            val_outputs["val_res_step"] = val_res_step
+            val_outputs["val_res"] = val_res
+            val_outputs["exists_topk"] = exists_topk
+            val_outputs["tracking_topk"] = tracking_topk
             """
             att_statistics = torch.empty(size=(13,head_factor,num_steps_attention)).cuda()
             positive_vals = batch.edge_labels.sum()
@@ -266,21 +362,50 @@ class MOTNeuralSolver(pl.LightningModule):
             print(i,':',att_statistics[t])
             t += 1
         """
-        self.validation_epoch += 1
-        edge_attr = []
-        attention = []
-        cal_num = 0
         if self.has_trained = True:
+
+            self.validation_epoch += 1
+            edge_attr = []
+            attention = []
+            edge_num = 0
+            node_num = 0
+
+            val_res_step = torch.zeros_like(val_outputs[0]["val_res_step"])
+            val_res = torch.zeros_like(val_outputs[0]["val_res"])
+            exists_topk = torch.zeros_like(val_outputs[0]["exists_topk"])
+            tracking_topk = torch.zeros_like(val_outputs[0]["tracking_topk"])
+            
             for val_output in val_outputs:
                 edge_attr += [val_output["edge_attr"]]
                 attention += [val_output["attention"]]
-                cal_num  += val_outputs["cal_num"]
+                edge_num += val_outputs["edge_num"]
+                node_num += val_outputs["node_num"]
+                    
+                val_res_step += val_outputs["val_res_step"]
+                val_res += val_outputs["val_res"]
+                exists_topk += val_outputs["exists_topk"]
+                tracking_topk += val_outputs["tracking_topk"]
 
-        
-        edge_attr = torch.cat(edge_attr, dim = 0)
-        attention = torch.cat(attention, dim = 0)
-        self._plot(edge_attr, attention, self.validation_epoch, self.hparams['visual']['path'], 'last')
-        self._plot(edge_attr, attention, self.validation_epoch, self.hparams['visual']['path'], 'mean')
+            val_res_step /= edge_num
+            val_res /= edge_num
+            exists_topk /= exists_topk
+            tracking_topk /= tracking_topk
+
+            print("Epoch:"+str(self.validation_epoch))
+            print(val_res_step)
+            print(val_res)
+            print(exists_topk)
+            print(tracking_topk)
+
+            np.save(path+"val_res_step_"+str(self.validation_epoch)+".npy",val_res_step.detach().cpu().numpy())
+            np.save(path+"val_res_"+str(self.validation_epoch)+".npy",val_res.detach().cpu().numpy())
+            np.save(path+"exists_topk_"+str(self.validation_epoch)+".npy",exists_topk.detach().cpu().numpy())
+            np.save(path+"tracking_topk_"+str(self.validation_epoch)+".npy",tracking_topk.detach().cpu().numpy())
+
+            edge_attr = torch.cat(edge_attr, dim = 0)
+            attention = torch.cat(attention, dim = 0)
+            self._plot(edge_attr, attention, self.validation_epoch, self.hparams['visual']['path'], 'last')
+            self._plot(edge_attr, attention, self.validation_epoch, self.hparams['visual']['path'], 'mean')
 
         metrics = pd.DataFrame(val_outputs["log"]).mean(axis=0).to_dict()
         metrics = {metric_name: torch.as_tensor(metric) for metric_name, metric in metrics.items()}
