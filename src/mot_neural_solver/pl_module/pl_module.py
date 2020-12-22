@@ -115,11 +115,11 @@ class MOTNeuralSolver(pl.LightningModule):
         
         att_loss_matrix = None
         att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
-        att_loss=0
+        att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
+        att_loss = torch.sum(att_loss_matrix)
         if att_regu:
             num_steps_attention = len(outputs['att_coefficients'])
             head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
-            att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
             for step in range(num_steps_attention):
                 for head in range(head_factor):
                     weight = (batch.edge_labels.view(-1) == 0) + (batch.edge_labels.view(-1) == 1) * pos_weight
@@ -130,7 +130,7 @@ class MOTNeuralSolver(pl.LightningModule):
                         batch.edge_labels.view(-1),
                         weight=weight)
             att_loss = torch.sum(att_loss_matrix) / head_factor
-        return {"loss": loss_class + att_regu_strength * att_loss , "loss_class": loss_class, "loss_matrix" : att_loss_matrix}
+        return {"loss": loss_class + att_regu_strength * att_loss , "loss_class": loss_class, "loss_regu" : att_loss}
 
     def training_step(self, batch, batch_idx):
         device = (next(self.model.parameters())).device
@@ -163,7 +163,7 @@ class MOTNeuralSolver(pl.LightningModule):
 
             val_outputs = {"log": log}
             val_outputs["edge_attr"] = batch.edge_attr.detach()
-            val_outputs["loss_matrix"] = loss_dic["loss_matrix"].detach()
+            val_outputs["loss_regu"] = loss_dic["loss_regu"].detach()
             val_outputs["loss_class"] = loss_dic["loss_class"].detach()
             val_outputs["loss"] = loss_dic["loss"].detach()
             val_outputs["node_num"] = batch.x.size(0)
@@ -310,11 +310,15 @@ class MOTNeuralSolver(pl.LightningModule):
             tracking_percentage_topk = torch.zeros_like(val_outputs[0]["tracking_percentage_topk"])
             tracking_exists_topk = torch.zeros_like(val_outputs[0]["tracking_exists_topk"])
             loss = []
+            loss_class = []
+            loss_regu = []
             
             for val_output in val_outputs:
                 edge_attr += [val_output["edge_attr"]]
                 attention += [val_output["attention"]]
                 loss += [val_output["loss"]]
+                loss_class += [val_output["loss_class"]]
+                loss_regu += [val_output["loss_regu"]]
                 edge_num += val_output["edge_num"]
                 cal_edge_num = val_output["cal_edge_num"] + cal_edge_num
                 node_num += val_output["node_num"]
@@ -335,8 +339,10 @@ class MOTNeuralSolver(pl.LightningModule):
             tracking_percentage_topk /= cal_edge_num * torch.cumsum(torch.FloatTensor(np.arange(self.hparams['visual']['topk'])+1), dim=0).to(attention.device).unsqueeze(0)
 
             print("\nEpoch:"+str(self.validation_epoch))
-            print(loss)
-            print(torch.stack(loss, dim=0).mean())
+            print(loss_class)
+            print(torch.stack(loss_class, dim=0).mean())
+            print(loss_regu)
+            print(torch.stack(loss_regu, dim=0).mean())
             print(val_res_step)
             print(val_res)
             print(exists_topk)

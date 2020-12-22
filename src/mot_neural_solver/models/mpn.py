@@ -95,11 +95,11 @@ class AttentionModel(nn.Module):
         else:
             flow_out = row < col
             flow_in = row > col
-            a_out =  torch_scatter.composite.scatter_softmax(e[flow_out],row[flow_out], dim=1, eps=1e-12)
-            a_in = torch_scatter.composite.scatter_softmax(e[flow_in],row[flow_in], dim=1, eps=1e-12)
+            a_out =  torch_scatter.composite.scatter_softmax(e[:,flow_out],row[flow_out], dim=1, eps=1e-12)
+            a_in = torch_scatter.composite.scatter_softmax(e[:,flow_in],row[flow_in], dim=1, eps=1e-12)
             a = torch.zeros_like(e).to(e.device)
-            a[flow_out] = a_out
-            a[flow_in] = a_in  
+            a.T[flow_out] = a_out.T
+            a.T[flow_in] = a_in.T  
 
         """                                                   
         flow_out = row < col
