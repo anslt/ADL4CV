@@ -74,12 +74,13 @@ class EdgeModel(nn.Module):
         return self.edge_mlp(out)
 
 class AttentionModel(nn.Module):
-    def __init__(self, configs):
+    def __init__(self, configs,time_aware=True):
         super(AttentionModel, self).__init__()
 
         self.alpha = configs["alpha"]
         self.in_features = configs["in_features"]
         self.attention_head_num = configs["attention_head_num"]
+        self.time_aware = time_aware
 
         # add cuda directly
         self.aa = nn.Parameter(torch.empty(size=(self.attention_head_num,2*self.in_features))).cuda() #[k,64]
@@ -89,7 +90,17 @@ class AttentionModel(nn.Module):
     def forward(self, x,row,col):
         xx = torch.cat([x[row], x[col]], dim=1)                                                          # cat([M,d=32],[M,d=32])->[M,d=64]
         e = self.leakyrelu(torch.matmul(self.aa,xx.T))                                                   # [k,64]*[64,M]->[k,M]
-        a = torch_scatter.composite.scatter_softmax(e,row, dim=1, eps=1e-12)                             # [k,M]->[k,M]
+        if self.time_aware:
+            a = torch_scatter.composite.scatter_softmax(e,row, dim=1, eps=1e-12)                             # [k,M]->[k,M]
+        else:
+            flow_out = row < col
+            flow_in = row > col
+            a_out =  torch_scatter.composite.scatter_softmax(e[flow_out],row[flow_out], dim=1, eps=1e-12)
+            a_in = torch_scatter.composite.scatter_softmax(e[flow_in],row[flow_in], dim=1, eps=1e-12)
+            a = torch.zeros_like(e).to(e.device)
+            a[flow_out] = a_out
+            a[flow_in] = a_in  
+
         """                                                   
         flow_out = row < col
         flow_in = row > col
@@ -115,9 +126,9 @@ class TimeAwareNodeModel(nn.Module):
         if attention_configs is not None and attention_configs["use_attention"] == True:
             self.use_attention = attention_configs["use_attention"]
             self.head_factor = attention_configs["attention_head_num"]
-            self.attention_out = AttentionModel(attention_configs)
+            self.attention_out = AttentionModel(attention_configs,self.time_aware)
             if self.time_aware:
-                self.attention_in = AttentionModel(attention_configs)
+                self.attention_in = AttentionModel(attention_configs,self.time_aware)
         else:
             self.use_attention = False
             self.head_factor = 1
