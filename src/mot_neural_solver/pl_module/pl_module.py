@@ -115,7 +115,6 @@ class MOTNeuralSolver(pl.LightningModule):
         
         att_loss_matrix = None
         att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
-        att_loss = torch.FloatTensor([0]).to(loss_class.device)
         if att_regu:
             num_steps_attention = len(outputs['att_coefficients'])
             head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
