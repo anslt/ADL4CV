@@ -122,13 +122,13 @@ class MOTNeuralSolver(pl.LightningModule):
             att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
             for step in range(num_steps_attention):
                 for head in range(head_factor):
-                    weight = (batch.edge_labels.view(-1) == 0) + (batch.edge_labels.view(-1) == 1) * pos_weight
+                    #weight = (batch.edge_labels.view(-1) == 0) + (batch.edge_labels.view(-1) == 1) * pos_weight
                     a = outputs['att_coefficients'][step][head].view(-1)
                     aa = torch.min(a,torch.ones_like(a).to(a.device))
                     att_loss_matrix[head, step] = F.binary_cross_entropy(
                         aa,
-                        batch.edge_labels.view(-1),
-                        weight=weight)
+                        batch.edge_labels.view(-1))
+                        #weight=weight)
             att_loss = torch.sum(att_loss_matrix) / head_factor
         else:
             att_loss = torch.FloatTensor([0]).to(loss_class.device)
