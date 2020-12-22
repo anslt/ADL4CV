@@ -115,11 +115,11 @@ class MOTNeuralSolver(pl.LightningModule):
         
         att_loss_matrix = None
         att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
-        att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
-        att_loss = torch.sum(att_loss_matrix)
+        att_loss = torch.FloatTensor([0]).to(loss_class.device)
         if att_regu:
             num_steps_attention = len(outputs['att_coefficients'])
             head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
+            att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
             for step in range(num_steps_attention):
                 for head in range(head_factor):
                     weight = (batch.edge_labels.view(-1) == 0) + (batch.edge_labels.view(-1) == 1) * pos_weight
@@ -130,6 +130,9 @@ class MOTNeuralSolver(pl.LightningModule):
                         batch.edge_labels.view(-1),
                         weight=weight)
             att_loss = torch.sum(att_loss_matrix) / head_factor
+        else:
+            att_loss = torch.FloatTensor([0]).to(loss_class.device)
+            
         return {"loss": loss_class + att_regu_strength * att_loss , "loss_class": loss_class, "loss_regu" : att_loss}
 
     def training_step(self, batch, batch_idx):
