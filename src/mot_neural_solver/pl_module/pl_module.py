@@ -115,7 +115,7 @@ class MOTNeuralSolver(pl.LightningModule):
             for step in range(num_steps_attention):
                 for head in range(head_factor):
                     a = outputs['att_coefficients'][step][head].view(-1)
-                    aa = torch.min(aa,torch.full(a.shape,1).cuda())
+                    aa = torch.min(2*a,torch.full(a.shape,1).cuda())
                     loss_att += F.binary_cross_entropy(aa,batch.edge_labels.view(-1))
             loss_att = loss_att/head_factor
             return loss_class + att_regu_strength*loss_att
@@ -163,7 +163,7 @@ class MOTNeuralSolver(pl.LightningModule):
             for head in range(head_factor):
                 a = outputs['att_coefficients'][step][head].view(-1)
                 ### attention loss matrix ### 
-                aa = torch.min(aa,torch.full(a.shape,1).cuda())
+                aa = torch.min(2*a,torch.full(a.shape,1).cuda())
                 att_statistics[0,head,step] = F.binary_cross_entropy(aa,batch.edge_labels.view(-1)) 
                 ### attention loss matrix ### 
                 ### attention mean matrix ###
