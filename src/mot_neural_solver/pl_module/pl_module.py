@@ -337,8 +337,8 @@ class MOTNeuralSolver(pl.LightningModule):
             val_res_step /= edge_num
             val_res /= edge_num
             exists_topk /= cal_edge_num
-            tracking_exists_topk /= cal_edge_num
-            tracking_percentage_topk /= cal_edge_num * torch.cumsum(torch.FloatTensor(np.arange(self.hparams['visual']['topk'])+1), dim=0).to(attention.device).unsqueeze(0)
+            tracking_exists_topk /= node_num
+            tracking_percentage_topk /= nodenum * torch.FloatTensor(np.arange(self.hparams['visual']['topk'])+1).to(attention.device).unsqueeze(0)
 
             print("\nEpoch:"+str(self.validation_epoch))
             print(loss_class)
@@ -404,7 +404,7 @@ class MOTNeuralSolver(pl.LightningModule):
 
             ax.set_xlabel(x_labels[i], fontsize=30)
             ax.set_ylabel(y_label, fontsize=30)
-            ax.set_title("mode:" + mode + " ,epoch:" + str(epoch) + " ,node 1. " + x_labels[i] + " vs " + y_label, fontsize=30)
+            ax.set_title("mode:" + mode + " ,epoch:" + str(epoch) + " ,node 2. " + x_labels[i] + " vs " + y_label, fontsize=30)
             ax.set_ylim(0,ylim_max)
             
             file = "epoch_" + str(epoch) + "_" + mode + "_" + x_labels[i] + ".png"
