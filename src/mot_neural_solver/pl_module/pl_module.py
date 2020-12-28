@@ -43,6 +43,8 @@ class MOTNeuralSolver(pl.LightningModule):
         self.right_num = 0
         self.total_num = 0
         self.i = 0
+        self.count = 0.0
+        self.value = 0.0
 
     def forward(self, x):
         self.model(x)
@@ -132,10 +134,25 @@ class MOTNeuralSolver(pl.LightningModule):
                                                              pos_weight=pos_weight)
 
         # print(batch.ix[0])
+        row, col = batch.edge_index
+        row_list = row.tolist()
+        row_uniq = set(row_list)
+        stat = [row_list.count(x) for x in row_uniq]
+        print(len(stat))
+
+        # statistics part
+        accm = np.cumsum(stat)
+        interval = [0] + accm.tolist()
+
+        index = np.where(batch.edge_labels.view(-1).cpu().numpy()==1)
+        count = len(index)
+
+
+
         if train_val == 'train':
             self.i += 1
 
-        if train_val == 'train' and self.i % 748 == 0:
+        if train_val == 'train' and self.i % 350 == 0:
             print("YES")
             k0 = 4
             row, col = batch.edge_index
@@ -189,8 +206,9 @@ class MOTNeuralSolver(pl.LightningModule):
 
                 # Here the image "im" is cropped and assigned to new variable im_crop
                 im_crop = im.crop((left, upper, right, lower))
-                filename = "/content/ADL4CV/image/" + str(self.i // 748) + "_pic" + str(k) + "_original.jpg"
+                filename = "/content/ADL4CV/image/" + str(self.i // 350) + "_pic" + str(k) + "_original.jpg"
                 im_crop.save(filename)
+                print("pic" + str(self.i // 350) + ":")
 
                 for key, v in enumerate(index_largest):
                     id0 = col[matches[k][v]].cpu().item()
@@ -204,9 +222,10 @@ class MOTNeuralSolver(pl.LightningModule):
 
                     # Here the image "im" is cropped and assigned to new variable im_crop
                     im_crop = im.crop((left, upper, right, lower))
-                    filename = "/content/ADL4CV/image/" + str(self.i // 748) + "_pic" + str(k) + "_large" + str(
+                    filename = "/content/ADL4CV/image/" + str(self.i // 350) + "_pic" + str(k) + "_large" + str(
                         key) + ".jpg"
                     im_crop.save(filename)
+                    print("largest" + str(key + 1) + ":" + str(b[v]))
 
                 for key, v in enumerate(index_smallest):
                     id0 = col[matches[k][v]].cpu().item()
@@ -220,8 +239,9 @@ class MOTNeuralSolver(pl.LightningModule):
 
                     # Here the image "im" is cropped and assigned to new variable im_crop
                     im_crop = im.crop((left, upper, right, lower))
-                    filename = "/content/ADL4CV/image/" + str(self.i // 748) + "_pic" + str(k) + "_small" + str(key) + ".jpg"
+                    filename = "/content/ADL4CV/image/" + str(self.i // 350) + "_pic" + str(k) + "_small" + str(key) + ".jpg"
                     im_crop.save(filename)
+                    print("smallest" + str(key + 1) + ":" + str(b[v]))
 
         """
         total_edge = torch.sum(batch.edge_labels.view(-1)).cpu().item()
