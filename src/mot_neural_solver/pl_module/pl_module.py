@@ -118,17 +118,25 @@ class MOTNeuralSolver(pl.LightningModule):
         # add supervision on attention factor #
         #######################################
 
-        num_steps_attention = len(outputs['att_coefficients'])
-        head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
+        att_loss_matrix = None
         att_regu_strength = self.hparams['graph_model_params']['attention']['attention_supervision_strength']
-        att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
-        for step in range(num_steps_attention):
-            for head in range(head_factor):
-                att_loss_matrix[head, step] = F.binary_cross_entropy(
-                    outputs['att_coefficients'][step][head].view(-1),
-                    batch.edge_labels.view(-1),
-                    pos_weight=pos_weight)
-        att_loss = torch.sum(att_loss_matrix) / head_factor
+        if att_regu:
+            num_steps_attention = len(outputs['att_coefficients'])
+            head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
+            att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
+            for step in range(num_steps_attention):
+                for head in range(head_factor):
+                    weight = (batch.edge_labels.view(-1) == 0) + (batch.edge_labels.view(-1) == 1) * pos_weight
+                    a = outputs['att_coefficients'][step][head].view(-1)
+                    aa = torch.min(a,torch.ones_like(a).to(a.device))
+                    att_loss_matrix[head, step] = F.binary_cross_entropy(
+                        aa,
+                        batch.edge_labels.view(-1),
+                        weight=weight)
+            att_loss = torch.sum(att_loss_matrix) / head_factor
+        else:
+            att_loss = torch.FloatTensor([0]).to(loss_class.device)
+
         return loss_class + att_regu_strength * att_loss
 
     def _train_val_step(self, batch, batch_idx, train_val):
