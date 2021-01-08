@@ -125,6 +125,7 @@ graph_model_params:
   reattach_initial_nodes: False  # Determines whether initially encoded node feats are used during node updates
   reattach_initial_edges: True  # Determines whether initially encoded edge feats are used during node updates
   first_prune_step: 4
+  graph_pruning: True
 
   encoder_feats_dict:
     edge_in_dim: 6
