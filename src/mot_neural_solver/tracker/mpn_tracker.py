@@ -106,7 +106,7 @@ class MPNTracker:
 
         else:
             with torch.no_grad():
-                pruned_edge_preds = torch.sigmoid(self.graph_model(subgraph)['classified_edges'][-1].view(-1))
+                pruned_edge_preds = self.graph_model(subgraph)['classified_edges'][-1].view(-1)
 
         edge_preds = torch.zeros(knn_mask.shape[0]).to(pruned_edge_preds.device)
         edge_preds[knn_mask] = pruned_edge_preds
