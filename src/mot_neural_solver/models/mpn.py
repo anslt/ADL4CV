@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from torch_scatter import scatter_mean, scatter_max, scatter_add
 import torch_scatter
@@ -410,15 +411,19 @@ class MOTMPNet(nn.Module):
 
             if step >= first_class_step:
                 # Classification Step
-                dec_edge_feats, _ = self.classifier(latent_edge_feats)
-                outputs_dict['classified_edges'].append(dec_edge_feats)
+                logits, _ = self.classifier(latent_edge_feats)
+                probabilities1 = torch.zeros_like(logits.view(-1))
+                probabilities1[mask] = torch.sigmoid(logits.view(-1)[mask])
+                probabilities = probabilities1
+                outputs_dict['classified_edges'].append(probabilities)
+
             if self.use_attention and step >= first_attention_step:
                 outputs_dict['att_coefficients'].append(a.clone())
             
             if self.graph_pruning and step >= self.first_prune_step and step<self.num_enc_steps:
-                valid_logits = dec_edge_feats.view(-1)[mask]
-                topk_mask = torch.full((valid_logits.shape[0],), True,dtype=torch.bool)
-                _,indice = torch.topk(valid_logits,int(len(valid_logits)*self.prune_factor),largest=False)
+                valid_pro = probabilities[mask]
+                topk_mask = torch.full((valid_pro.shape[0],), True,dtype=torch.bool)
+                _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
                 topk_mask[indice]= False
                 mask[mask==True]=topk_mask
                 outputs_dict['mask'].append(mask.clone())
