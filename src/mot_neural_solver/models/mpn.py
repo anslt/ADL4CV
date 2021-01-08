@@ -381,27 +381,37 @@ class MOTMPNet(nn.Module):
         if self.use_attention:
             outputs_dict = {'classified_edges': [],'att_coefficients':[]}
         else: outputs_dict = {'classified_edges': []}
-
+        
+        mask = torch.full((edge_index.shape[1],), True,dtype=torch.bool)
         for step in range(1, self.num_enc_steps + 1):
-
+            
             # Reattach the initially encoded embeddings before the update
             if self.reattach_initial_edges:
-                latent_edge_feats = torch.cat((initial_edge_feats, latent_edge_feats), dim=1)
+                latent_edge_feats = torch.cat((initial_edge_feats[full_mask], latent_edge_feats), dim=1)
             if self.reattach_initial_nodes:
                 latent_node_feats = torch.cat((initial_node_feats, latent_node_feats), dim=1)
 
             # Message Passing Step
             if self.use_attention:
-                latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index, latent_edge_feats)
+                latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
             else:
-                latent_node_feats, latent_edge_feats = self.MPNet(latent_node_feats, edge_index, latent_edge_feats)
-            
+                xxxx=torch.zeros(latent_edge_feats.shape).cuda()
+                latent_node_feats, xxxx[mask] = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
+                latent_edge_feats = xxxx
+
             if step >= first_class_step:
                 # Classification Step
                 dec_edge_feats, _ = self.classifier(latent_edge_feats)
                 outputs_dict['classified_edges'].append(dec_edge_feats)
             if self.use_attention and step >= first_attention_step:
                 outputs_dict['att_coefficients'].append(a)
+            
+            if step >= 4:
+                idx = dec_edge_feats.view(-1)[mask]
+                mask1 = torch.full((idx.shape[0],), True,dtype=torch.bool)
+                _,indice = torch.topk(idx,int(len(idx)/20),largest=False)
+                mask1[indice]= False
+                mask[mask==True]=mask1
 
         if self.num_enc_steps == 0:
             dec_edge_feats, _ = self.classifier(latent_edge_feats)
