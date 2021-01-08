@@ -404,7 +404,7 @@ class MOTMPNet(nn.Module):
             if self.use_attention:
                 latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
             else:
-                edge_feats = torch.zeros(latent_edge_feats.shape[0],encoder_feats_dict['node_out_dim']).cuda()
+                edge_feats = torch.zeros(latent_edge_feats.shape[0],16).cuda()
                 latent_node_feats, edge_feats[mask] = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
                 latent_edge_feats = edge_feats
 
@@ -413,15 +413,15 @@ class MOTMPNet(nn.Module):
                 dec_edge_feats, _ = self.classifier(latent_edge_feats)
                 outputs_dict['classified_edges'].append(dec_edge_feats)
             if self.use_attention and step >= first_attention_step:
-                outputs_dict['att_coefficients'].append(a)
+                outputs_dict['att_coefficients'].append(a.clone())
             
             if self.graph_pruning and step >= self.first_prune_step and step<self.num_enc_steps:
                 valid_logits = dec_edge_feats.view(-1)[mask]
                 topk_mask = torch.full((valid_logits.shape[0],), True,dtype=torch.bool)
                 _,indice = torch.topk(valid_logits,int(len(valid_logits)*self.prune_factor),largest=False)
-                mask1[indice]= False
-                mask[mask==True]=mask1
-                outputs_dict['mask'].append(mask)
+                topk_mask[indice]= False
+                mask[mask==True]=topk_mask
+                outputs_dict['mask'].append(mask.clone())
 
         if self.num_enc_steps == 0:
             dec_edge_feats, _ = self.classifier(latent_edge_feats)
