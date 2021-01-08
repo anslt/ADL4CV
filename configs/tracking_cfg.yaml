@@ -112,10 +112,10 @@ graph_model_params:
 
   time_aware: False
   attention:
-    use_attention: True
+    use_attention: False
     alpha: 0.2
     attention_head_num: 2
-    att_regu: True
+    att_regu: False
     att_regu_strength: 0.5
 
   node_agg_fn: 'sum'
