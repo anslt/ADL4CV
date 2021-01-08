@@ -252,7 +252,11 @@ class MOTMPNet(nn.Module):
         self.num_enc_steps = model_params['num_enc_steps']
         self.num_class_steps = model_params['num_class_steps']
         self.num_attention_steps = model_params['num_attention_steps']
-
+        self.first_prune_step = model_params['first_prune_step']
+        self.graph_pruning = model_params['graph_pruning']
+        self.prune_factor = model_params['prune_factor']
+        
+        
     def _build_core_MPNet(self, model_params, encoder_feats_dict):
         """
         Builds the core part of the Message Passing Network: Node Update and Edge Update models.
@@ -379,15 +383,20 @@ class MOTMPNet(nn.Module):
         first_class_step = self.num_enc_steps - self.num_class_steps + 1
         first_attention_step = self.num_enc_steps - self.num_attention_steps + 1 
         if self.use_attention:
-            outputs_dict = {'classified_edges': [],'att_coefficients':[]}
-        else: outputs_dict = {'classified_edges': []}
+            if self.graph_pruning: 
+                outputs_dict = {'classified_edges': [],'att_coefficients':[],'mask':[]}
+            else: outputs_dict = {'classified_edges': [],'att_coefficients':[]}
+        else: 
+            if self.graph_pruning:  
+                outputs_dict = {'classified_edges': [],'mask':[]}
+            else: outputs_dict = {'classified_edges': []}
         
         mask = torch.full((edge_index.shape[1],), True,dtype=torch.bool)
         for step in range(1, self.num_enc_steps + 1):
             
             # Reattach the initially encoded embeddings before the update
             if self.reattach_initial_edges:
-                latent_edge_feats = torch.cat((initial_edge_feats[full_mask], latent_edge_feats), dim=1)
+                latent_edge_feats = torch.cat((initial_edge_feats, latent_edge_feats), dim=1)              # [M,16]+[M,16] -> [M,32]
             if self.reattach_initial_nodes:
                 latent_node_feats = torch.cat((initial_node_feats, latent_node_feats), dim=1)
 
@@ -395,9 +404,9 @@ class MOTMPNet(nn.Module):
             if self.use_attention:
                 latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
             else:
-                xxxx=torch.zeros(latent_edge_feats.shape).cuda()
-                latent_node_feats, xxxx[mask] = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
-                latent_edge_feats = xxxx
+                edge_feats = torch.zeros(latent_edge_feats.shape[0],encoder_feats_dict['node_out_dim']).cuda()
+                latent_node_feats, edge_feats[mask] = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
+                latent_edge_feats = edge_feats
 
             if step >= first_class_step:
                 # Classification Step
@@ -406,12 +415,13 @@ class MOTMPNet(nn.Module):
             if self.use_attention and step >= first_attention_step:
                 outputs_dict['att_coefficients'].append(a)
             
-            if step >= 4:
-                idx = dec_edge_feats.view(-1)[mask]
-                mask1 = torch.full((idx.shape[0],), True,dtype=torch.bool)
-                _,indice = torch.topk(idx,int(len(idx)/20),largest=False)
+            if self.graph_pruning and step >= self.first_prune_step and step<self.num_enc_steps:
+                valid_logits = dec_edge_feats.view(-1)[mask]
+                topk_mask = torch.full((valid_logits.shape[0],), True,dtype=torch.bool)
+                _,indice = torch.topk(valid_logits,int(len(valid_logits)*self.prune_factor),largest=False)
                 mask1[indice]= False
                 mask[mask==True]=mask1
+                outputs_dict['mask'].append(mask)
 
         if self.num_enc_steps == 0:
             dec_edge_feats, _ = self.classifier(latent_edge_feats)
