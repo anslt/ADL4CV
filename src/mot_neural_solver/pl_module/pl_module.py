@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import numpy as np
 
 import pandas as pd
 
@@ -140,17 +141,18 @@ class MOTNeuralSolver(pl.LightningModule):
         log = {key + '/val': val for key, val in logs.items()} 
         val_outputs = log
         
-        accumulated_fn = np.zeros(size=(len(outputs['mask']),))
-        for mask in outputs['mask']:
-            accumulated_fn[i] = torch.sum(batch.edge_labels[~mask])
-        val_outputs['accumulated_fn'] = accumulated_fn
+        accumulated_fn = np.zeros(len(outputs['mask']),)
+        for i in range(len(outputs['mask'])):
+            mask = outputs['mask'][i]
+            print(torch.sum(mask))
+            accumulated_fn[i]=torch.sum(batch.edge_labels[~mask])
+
+        print(accumulated_fn)
+        print(len(batch.edge_labels))
+        print(torch.sum(batch.edge_labels.view(-1)).cpu())
         return val_outputs
 
     def validation_epoch_end(self, val_outputs):
-        fn = pd.DataFrame(val_outputs)['accumulated_fn'].to_numpy()
-        fn = np.stack(fn)
-        fn = np.mean(fn)
-        print('accumulated false negative through layers:',fn)
         metrics = pd.DataFrame(val_outputs).mean(axis=0).to_dict()
         metrics = {metric_name: torch.as_tensor(metric) for metric_name, metric in metrics.items()}
         return {'val_loss': metrics['loss/val'], 'log': metrics}
