@@ -250,10 +250,11 @@ class MOTMPNet(nn.Module):
         self.encoder = MLPGraphIndependent(**encoder_feats_dict)
         self.classifier = MLPGraphIndependent(**classifier_feats_dict)
 
+        self.num_enc_steps = model_params['num_enc_steps']
+
         # Define the 'Core' message passing network (i.e. node and edge update models)
         self.MPNet = self._build_core_MPNet(model_params=model_params, encoder_feats_dict=encoder_feats_dict)
 
-        self.num_enc_steps = model_params['num_enc_steps']
         self.num_class_steps = model_params['num_class_steps']
         self.num_attention_steps = model_params['num_attention_steps']
         self.graph_pruning = model_params["dynamical_graph"]['graph_pruning']
@@ -314,19 +315,19 @@ class MOTMPNet(nn.Module):
         attention_configs["in_features"] = node_factor * encoder_feats_dict['node_out_dim']
         head_factor = attention_configs["attention_head_num"] if self.use_attention else 1
 
+        edge_mlp = MLP(input_dim=edge_model_in_dim,
+                       fc_dims=edge_model_feats_dict['fc_dims'],
+                       dropout_p=edge_model_feats_dict['dropout_p'],
+                       use_batchnorm=edge_model_feats_dict['use_batchnorm'])
+
+        node_mlp = MLP(input_dim=encoder_feats_dict['node_out_dim'] * head_factor * time_factor,
+                       fc_dims=node_model_feats_dict['fc_dims'],
+                       dropout_p=node_model_feats_dict['dropout_p'],
+                       use_batchnorm=node_model_feats_dict['use_batchnorm'])
+
         if self.network_split:
             network = []
             for step in range(1, self.num_enc_steps + 1):
-                edge_mlp = MLP(input_dim=edge_model_in_dim,
-                               fc_dims=edge_model_feats_dict['fc_dims'],
-                               dropout_p=edge_model_feats_dict['dropout_p'],
-                               use_batchnorm=edge_model_feats_dict['use_batchnorm'])
-
-                node_mlp = MLP(input_dim=encoder_feats_dict['node_out_dim'] * head_factor * time_factor,
-                               fc_dims=node_model_feats_dict['fc_dims'],
-                               dropout_p=node_model_feats_dict['dropout_p'],
-                               use_batchnorm=node_model_feats_dict['use_batchnorm'])
-
                 flow_out_mlp = []
                 for i in range(head_factor):
                     flow_out_mlp.append(MLP(input_dim=node_model_in_dim,
@@ -360,17 +361,7 @@ class MOTMPNet(nn.Module):
 
             return network
         else:
-            edge_mlp = MLP(input_dim=edge_model_in_dim,
-                           fc_dims=edge_model_feats_dict['fc_dims'],
-                           dropout_p=edge_model_feats_dict['dropout_p'],
-                           use_batchnorm=edge_model_feats_dict['use_batchnorm'])
-
-
-            node_mlp = MLP(input_dim=encoder_feats_dict['node_out_dim']*head_factor*time_factor,
-                           fc_dims=node_model_feats_dict['fc_dims'],
-                           dropout_p=node_model_feats_dict['dropout_p'],
-                           use_batchnorm=node_model_feats_dict['use_batchnorm'])
-
+            
             flow_out_mlp = []
             for i in range(head_factor):
                 flow_out_mlp.append(MLP(input_dim=node_model_in_dim,
@@ -501,8 +492,8 @@ class MOTMPNet(nn.Module):
                     if self.prune_mode == "classifier_all":
                         valid_pro = probabilities[mask]
                         topk_mask = torch.full((valid_pro.shape[0],), True,dtype=torch.bool)
-                        _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
-                        _, indice = torch.topk(valid_pro, min(int(len(probablilities) * self.prune_factor),len(valid_pro) - N), largest=False)
+                        #_,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
+                        _,indice = torch.topk(valid_pro, min(int(len(probabilities) * self.prune_factor),len(valid_pro) - N), largest=False)
                         topk_mask[indice]= False
                         mask[mask==True]=topk_mask
                         outputs_dict['mask'].append(mask.clone())
