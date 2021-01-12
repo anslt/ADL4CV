@@ -141,14 +141,16 @@ class MOTNeuralSolver(pl.LightningModule):
         log = {key + '/val': val for key, val in logs.items()} 
         val_outputs = log
         
-        accumulated_fn = torch.zeros(len(outputs['mask'])+2,).cuda()
+        accumulated_fn = torch.zeros(len(outputs['mask'])+2,).to(device)
+        mask_fn = torch.zeros(len(outputs['mask']),).to(device)
         for i in range(len(outputs['mask'])):
             mask = outputs['mask'][i]
             accumulated_fn[i]=torch.sum(batch.edge_labels.view(-1)[~mask])
+            mask_fn[i] = torch.sum(mask, dim=0)
         accumulated_fn[-1] = torch.sum(batch.edge_labels.view(-1))
         accumulated_fn[-2] = len(batch.edge_labels)
         val_outputs['dynamic'] = accumulated_fn
-        val_outputs["mask"] = torch.sum(1-outputs['mask'],dim=0)
+        val_outputs["mask"] = mask_fn
         return val_outputs
 
     def validation_epoch_end(self, val_outputs):
@@ -159,7 +161,9 @@ class MOTNeuralSolver(pl.LightningModule):
             dynamic += val_outputs[k]['dynamic']
             mask += val_outputs[k]['mask']
 
+        print("\nedge condition:\n")
         print(dynamic)
+        print("\nmask\n")
         print(mask)
 
         metrics = pd.DataFrame(val_outputs).mean(axis=0).to_dict()

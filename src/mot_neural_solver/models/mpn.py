@@ -256,7 +256,7 @@ class MOTMPNet(nn.Module):
         self.num_class_steps = model_params['num_class_steps']
         self.num_attention_steps = model_params['num_attention_steps']
         self.graph_pruning = model_params["dynamical_graph"]['graph_pruning']
-        if self.graph_prune:
+        if self.graph_pruning:
             self.first_prune_step = model_params["dynamical_graph"]['first_prune_step']
             self.prune_factor = model_params["dynamical_graph"]['prune_factor']
             self.prune_frequency = model_params["dynamical_graph"]['prune_frequency']
@@ -422,11 +422,9 @@ class MOTMPNet(nn.Module):
                 # Classification Step
                 logits, _ = self.classifier(latent_edge_feats)
 
+                probabilities = None
                 if ~self.graph_pruning:
                     outputs_dict['classified_edges'].append(torch.sigmoid(logits))
-                else:
-                    probabilities = torch.zeros_like(logits.view(-1))
-                    probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
 
 
                 if self.use_attention and self.use_att_regu and step >= first_attention_step:
@@ -434,6 +432,8 @@ class MOTMPNet(nn.Module):
             
                 if self.graph_pruning and step >= self.first_prune_step and step<self.num_enc_steps \
                         and (step - self.graph_pruning) % self.prune_frequency == 0:
+                    probabilities = torch.zeros_like(logits.view(-1))
+                    probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
                     self.prune_keeping_ratio *= self.prune_factor
                     if self.prune_mode == "classifier_all":
                         valid_pro = probabilities[mask]
@@ -445,7 +445,7 @@ class MOTMPNet(nn.Module):
 
                     elif self.prune_mode == "classifier":
                         for i in range(x.size(0)):
-                            edge_i = (edge_index[0,:]==torch.FloatTensor([i]).cuda()).float()
+                            edge_i = (edge_index[0,:]==torch.FloatTensor([i]).cuda())
                             edge_i = (edge_i * probabilities) > 0
                             valid_pro = probabilities[edge_i]
                             if valid_pro.shape[0] <= 2:
