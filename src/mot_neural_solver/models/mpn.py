@@ -239,6 +239,8 @@ class MOTMPNet(nn.Module):
         self.model_params = model_params
         self.time_aware = model_params["time_aware"]
         self.use_attention = model_params["attention"]["use_attention"]
+        if self.use_attention:
+            self.use_att_regu = model_params["attention"]["use_att_regu"]
 
         # Define Encoder and Classifier Networks
         encoder_feats_dict = model_params['encoder_feats_dict']
@@ -253,9 +255,14 @@ class MOTMPNet(nn.Module):
         self.num_enc_steps = model_params['num_enc_steps']
         self.num_class_steps = model_params['num_class_steps']
         self.num_attention_steps = model_params['num_attention_steps']
-        self.first_prune_step = model_params['first_prune_step']
-        self.graph_pruning = model_params['graph_pruning']
-        self.prune_factor = model_params['prune_factor']
+        self.graph_pruning = model_params["dynamical_graph"]['graph_pruning']
+        if self.graph_prune:
+            self.first_prune_step = model_params["dynamical_graph"]['first_prune_step']
+            self.prune_factor = model_params["dynamical_graph"]['prune_factor']
+            self.prune_frequency = model_params["dynamical_graph"]['prune_frequency']
+            self.prune_mode = model_params["dynamical_graph"]['mode']
+            assert self.prune_mode in ["classifier", "classifier_all", "similarity"]
+            self.prune_keeping_ratio = 1.0
         
         
     def _build_core_MPNet(self, model_params, encoder_feats_dict):
@@ -404,32 +411,74 @@ class MOTMPNet(nn.Module):
             # Message Passing Step
             if self.use_attention:
                 latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
-            else:
+            elif self.graph_pruning:
                 edge_feats = torch.zeros(latent_edge_feats.shape[0],16).cuda()
                 latent_node_feats, edge_feats[mask] = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
                 latent_edge_feats = edge_feats
+            else:
+                latent_node_feats, latent_edge_feats, a = self.MPNet(latent_node_feats, edge_index, latent_edge_feats)
 
             if step >= first_class_step:
                 # Classification Step
                 logits, _ = self.classifier(latent_edge_feats)
-                probabilities1 = torch.zeros_like(logits.view(-1))
-                probabilities1[mask] = torch.sigmoid(logits.view(-1)[mask])
-                probabilities = probabilities1
-                outputs_dict['classified_edges'].append(probabilities)
 
-            if self.use_attention and step >= first_attention_step:
-                outputs_dict['att_coefficients'].append(a.clone())
+                if ~self.graph_pruning:
+                    outputs_dict['classified_edges'].append(torch.sigmoid(logits))
+                else:
+                    probabilities = torch.zeros_like(logits.view(-1))
+                    probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
+
+
+                if self.use_attention and self.use_att_regu and step >= first_attention_step:
+                    outputs_dict['att_coefficients'].append(a.clone())
             
-            if self.graph_pruning and step >= self.first_prune_step and step<self.num_enc_steps:
-                valid_pro = probabilities[mask]
-                topk_mask = torch.full((valid_pro.shape[0],), True,dtype=torch.bool)
-                _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
-                topk_mask[indice]= False
-                mask[mask==True]=topk_mask
-                outputs_dict['mask'].append(mask.clone())
+                if self.graph_pruning and step >= self.first_prune_step and step<self.num_enc_steps \
+                        and (step - self.graph_pruning) % self.prune_frequency == 0:
+                    self.prune_keeping_ratio *= self.prune_factor
+                    if self.prune_mode == "classifier_all":
+                        valid_pro = probabilities[mask]
+                        topk_mask = torch.full((valid_pro.shape[0],), True,dtype=torch.bool)
+                        _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
+                        topk_mask[indice]= False
+                        mask[mask==True]=topk_mask
+                        outputs_dict['mask'].append(mask.clone())
+
+                    elif self.prune_mode == "classifier":
+                        for i in range(x.size(0)):
+                            edge_i = (edge_index[0,:]==torch.FloatTensor([i]).cuda()).float()
+                            edge_i = (edge_i * probabilities) > 0
+                            valid_pro = probabilities[edge_i]
+                            if valid_pro.shape[0] <= 2:
+                                continue
+                            topk_mask = torch.full((valid_pro.shape[0],), True, dtype=torch.bool)
+                            _, indice = torch.topk(valid_pro, max(int(len(valid_pro) * self.prune_factor),1), largest=False)
+                            topk_mask[indice] = False
+                            mask[edge_i] = topk_mask
+                        outputs_dict['mask'].append(mask.clone())
+
+                    elif self.prune_mode == "similarity":
+                        for i in range(x.size(0)):
+                            edge_i = (edge_index[0,:]==torch.FloatTensor([i]).cuda()).float()
+                            edge_i = (edge_i * probabilities) > 0
+                            #valid_pro = probabilities[edge_i]
+                            num = torch.sum(edge_i)
+                            if num <= 2:
+                                continue
+                            distance = torch.norm(
+                                latent_node_feats[edge_index[0, edge_i]] - latent_node_feats[edge_index[1, edge_i]],
+                                dim=1)
+                            topk_mask = torch.full((num,), True, dtype=torch.bool)
+                            _, indice = torch.topk(distance, max(int(num * self.prune_factor),1), largest=False)
+                            topk_mask[indice] = False
+                            mask[edge_i] = topk_mask
+                        outputs_dict['mask'].append(mask.clone())
+
+                    probabilities = torch.zeros_like(logits.view(-1))
+                    probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
+                    outputs_dict['classified_edges'].append(probabilities)
 
         if self.num_enc_steps == 0:
-            dec_edge_feats, _ = self.classifier(latent_edge_feats)
+            dec_edge_feats, _ = torch.sigmoid(self.classifier(latent_edge_feats))
             outputs_dict['classified_edges'].append(dec_edge_feats)
 
         return outputs_dict

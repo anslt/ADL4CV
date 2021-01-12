@@ -118,15 +118,19 @@ graph_model_params:
     att_regu: False
     att_regu_strength: 0.5
 
+  dynamical_graph:
+    first_prune_step: 4
+    graph_pruning: True
+    prune_factor: 0.05
+    prune_frequency: 1
+    mode: "classifier"
+
   node_agg_fn: 'sum'
   num_enc_steps: 12  # Number of message passing steps
   num_class_steps: 11  # Number of message passing steps during feature vectors are classified (after Message Passing)
   num_attention_steps: 11 # Number of message passing steps during which attention coefficients are regularized
   reattach_initial_nodes: False  # Determines whether initially encoded node feats are used during node updates
   reattach_initial_edges: True  # Determines whether initially encoded edge feats are used during node updates
-  first_prune_step: 4
-  graph_pruning: True
-  prune_factor: 0.05
 
   encoder_feats_dict:
     edge_in_dim: 6
