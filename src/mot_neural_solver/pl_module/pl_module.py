@@ -146,7 +146,7 @@ class MOTNeuralSolver(pl.LightningModule):
         for i in range(len(outputs['mask'])):
             mask = outputs['mask'][i]
             accumulated_fn[i]=torch.sum(batch.edge_labels.view(-1)[~mask])
-            mask_fn[i] = torch.sum(mask, dim=0)
+            mask_fn[i] = torch.sum(~mask, dim=0)
         accumulated_fn[-1] = torch.sum(batch.edge_labels.view(-1))
         accumulated_fn[-2] = len(batch.edge_labels)
         val_outputs['dynamic'] = accumulated_fn

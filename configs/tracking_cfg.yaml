@@ -111,6 +111,7 @@ eval_params:
 graph_model_params:
 
   time_aware: False
+  network_split: False
   attention:
     use_attention: False
     alpha: 0.2
