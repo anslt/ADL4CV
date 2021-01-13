@@ -263,7 +263,8 @@ class MOTMPNet(nn.Module):
             self.prune_factor = model_params["dynamical_graph"]['prune_factor']
             self.prune_frequency = model_params["dynamical_graph"]['prune_frequency']
             self.prune_mode = model_params["dynamical_graph"]['mode']
-            assert self.prune_mode in ["classifier", "classifier_all", "similarity"]
+            self.prune_min_edge =  model_params["dynamical_graph"]['prune_min_edge']
+            assert self.prune_mode in ["classifier", "classifier_all", "similarity", "similarity_all"]
         
         
     def _build_core_MPNet(self, model_params, encoder_feats_dict):
@@ -318,12 +319,12 @@ class MOTMPNet(nn.Module):
         edge_mlp = MLP(input_dim=edge_model_in_dim,
                        fc_dims=edge_model_feats_dict['fc_dims'],
                        dropout_p=edge_model_feats_dict['dropout_p'],
-                       use_batchnorm=edge_model_feats_dict['use_batchnorm'])
+                       use_batchnorm=edge_model_feats_dict['use_batchnorm']).cuda()
 
         node_mlp = MLP(input_dim=encoder_feats_dict['node_out_dim'] * head_factor * time_factor,
                        fc_dims=node_model_feats_dict['fc_dims'],
                        dropout_p=node_model_feats_dict['dropout_p'],
-                       use_batchnorm=node_model_feats_dict['use_batchnorm'])
+                       use_batchnorm=node_model_feats_dict['use_batchnorm']).cuda()
 
         if self.network_split:
             network = []
@@ -361,7 +362,7 @@ class MOTMPNet(nn.Module):
 
             return network
         else:
-            
+
             flow_out_mlp = []
             for i in range(head_factor):
                 flow_out_mlp.append(MLP(input_dim=node_model_in_dim,
@@ -438,6 +439,17 @@ class MOTMPNet(nn.Module):
         
         mask = torch.full((edge_index.shape[1],), True,dtype=torch.bool)
         prune_keeping_ratio = 1.0
+
+        if self.graph_pruning and (self.prune_mode in ["classifier", "similarity"]):
+            edge_id = edge_index.detach().transpose(0, 1).contiguous().cpu()
+            row = edge_id[:, 0]
+            col = edge_id[:, 1]
+
+            row0, ind = torch.sort(row)
+            _, ind_back = torch.sort(ind)
+            output_row, count = torch.unique_consecutive(row0, return_counts=True)
+            cum_count = torch.cumsum(count, dim=0)
+
         for step in range(1, self.num_enc_steps + 1):
             
             # Reattach the initially encoded embeddings before the update
@@ -498,67 +510,96 @@ class MOTMPNet(nn.Module):
                         mask[mask==True]=topk_mask
                         outputs_dict['mask'].append(mask.clone())
 
+
                     elif self.prune_mode == "classifier":
-                        edge_id = edge_index.detach().transpose(0, 1).contiguous().cpu()
+
                         probabilities = probabilities.cpu()
-
-                        row = edge_id[:, 0]
-                        col = edge_id[:, 1]
-
-                        _, ind = torch.sort(row)
-                        _, ind_back = torch.sort(ind)
-
                         # edge_id = edge_id[ind]
-                        probabilities_convert =  probabilities[ind]
+                        probabilities_convert = probabilities[ind]
                         mask_convert = mask[ind]
 
-                        output, count = torch.unique_consecutive(row, return_counts=True)
-                        cum_count = torch.cumsum(count, dim=0)
-
                         # N = x.size(0)
-                        for i in range(N):
+                        for i in range(len(output_row)):
 
                             if i == 0:
                                 prob_i = probabilities_convert[range(cum_count[i])]
-                                index_i = torch.IntTensor(list(range(cum_count[i])))
+                                index_i = torch.LongTensor(list(range(cum_count[i])))
                                 mask_i = mask_convert[range(cum_count[i])]
                                 # temp = 0
                             else:
                                 prob_i = probabilities_convert[range(cum_count[i - 1], cum_count[i])]
-                                index_i = torch.IntTensor(list(range(cum_count[i - 1], cum_count[i])))
+                                index_i = torch.LongTensor(list(range(cum_count[i - 1], cum_count[i])))
                                 mask_i = mask_convert[range(cum_count[i - 1], cum_count[i])]
                                 # temp = cum_count[i - 1]
-                            _, ind_i = torch.sort(prob_i, descending=False)
-                            ind_i = ind_i[mask_i]
-                            keep = int(len(prob_i) * self.prune_factor)
-                            if torch.sum(prob_i) - 1 <= keep:
-                                if len(ind_i) > 2:
-                                    ind_i = ind_i[2:]
-                                else:
-                                    continue
-                            else:
-                                ind_i = ind_i[range(keep)]
+                            # print(index_i.shape[0])
+                            # print(prob_i.shape[0])
 
-                            mask_convert[index_i[ind_i]] = False
+                            index_i = index_i[mask_i]
+                            prob_i = prob_i[mask_i]
+
+                            # print(prob_i)
+                            if len(index_i) <= self.prune_min_edge:
+                                continue
+                            discard_num = int(len(prob_i) * self.prune_factor)
+                            _, ind_i = torch.topk(prob_i, discard_num, largest=False)
+                            mask_convert[index_i[ind_i.long()]] = False
 
                         mask = mask_convert[ind_back]
                         outputs_dict['mask'].append(mask.clone())
 
+                    elif self.prune_mode == "similarity_all":
+
+                        distance = torch.norm(
+                            latent_node_feats[edge_index[0, :]] - latent_node_feats[edge_index[1, :]],
+                            dim=1).detach()
+
+                        valid_dis = distance[mask]
+                        topk_mask = torch.full((valid_dis.shape[0],), True, dtype=torch.bool)
+                        # _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
+                        _, indice = torch.topk(valid_dis,
+                                               min(int(len(probabilities) * self.prune_factor), len(valid_dis) - N),
+                                               largest=True)
+                        topk_mask[indice] = False
+                        mask[mask == True] = topk_mask
+                        outputs_dict['mask'].append(mask.clone())
+
+
                     elif self.prune_mode == "similarity":
-                        for i in range(x.size(0)):
-                            edge_i = (edge_index[0,:]==torch.FloatTensor([i]).cuda()).float()
-                            edge_i = (edge_i * probabilities) > 0
-                            #valid_pro = probabilities[edge_i]
-                            num = torch.sum(edge_i)
-                            if num <= 2:
+
+                        distance = torch.norm(
+                            latent_node_feats[edge_index[0, edge_i]] - latent_node_feats[edge_index[1, edge_i]],
+                            dim=1)
+                        # edge_id = edge_id[ind]
+                        distance_convert = distance[ind]
+                        mask_convert = mask[ind]
+
+                        # N = x.size(0)
+                        for i in range(len(output_row)):
+
+                            if i == 0:
+                                dist_i = distance_convert[range(cum_count[i])]
+                                index_i = torch.LongTensor(list(range(cum_count[i])))
+                                mask_i = mask_convert[range(cum_count[i])]
+                                # temp = 0
+                            else:
+                                dist_i = distance_convert[range(cum_count[i - 1], cum_count[i])]
+                                index_i = torch.LongTensor(list(range(cum_count[i - 1], cum_count[i])))
+                                mask_i = mask_convert[range(cum_count[i - 1], cum_count[i])]
+                                # temp = cum_count[i - 1]
+                            # print(index_i.shape[0])
+                            # print(prob_i.shape[0])
+
+                            index_i = index_i[mask_i]
+                            dist_i = dist_i[mask_i]
+
+                            # print(prob_i)
+                            if len(index_i) <= self.prune_min_edge:
                                 continue
-                            distance = torch.norm(
-                                latent_node_feats[edge_index[0, edge_i]] - latent_node_feats[edge_index[1, edge_i]],
-                                dim=1)
-                            topk_mask = torch.full((num,), True, dtype=torch.bool)
-                            _, indice = torch.topk(distance, max(int(num * self.prune_factor),1), largest=False)
-                            topk_mask[indice] = False
-                            mask[edge_i] = topk_mask
+                            discard_num = int(len(dist_i) * self.prune_factor)
+                            _, ind_i = torch.topk(dist_i, discard_num, largest=False)
+                            mask_convert[index_i[ind_i.long()]] = False
+
+                        mask = mask_convert[ind_back]
                         outputs_dict['mask'].append(mask.clone())
 
                     probabilities = torch.zeros_like(logits.view(-1))

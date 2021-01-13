@@ -140,31 +140,34 @@ class MOTNeuralSolver(pl.LightningModule):
         logs = {**compute_perform_metrics(outputs, batch), **{'loss': loss}}
         log = {key + '/val': val for key, val in logs.items()} 
         val_outputs = log
-        
-        accumulated_fn = torch.zeros(len(outputs['mask'])+2,).to(device)
-        mask_fn = torch.zeros(len(outputs['mask']),).to(device)
-        for i in range(len(outputs['mask'])):
-            mask = outputs['mask'][i]
-            accumulated_fn[i]=torch.sum(batch.edge_labels.view(-1)[~mask])
-            mask_fn[i] = torch.sum(~mask, dim=0)
-        accumulated_fn[-1] = torch.sum(batch.edge_labels.view(-1))
-        accumulated_fn[-2] = len(batch.edge_labels)
-        val_outputs['dynamic'] = accumulated_fn
-        val_outputs["mask"] = mask_fn
+
+        if 'mask' in outputs:
+            accumulated_fn = torch.zeros(len(outputs['mask'])+2,).to(device)
+            mask_fn = torch.zeros(len(outputs['mask']),).to(device)
+            for i in range(len(outputs['mask'])):
+                mask = outputs['mask'][i]
+                accumulated_fn[i]=torch.sum(batch.edge_labels.view(-1)[~mask])
+                mask_fn[i] = torch.sum(~mask, dim=0)
+            accumulated_fn[-1] = torch.sum(batch.edge_labels.view(-1))
+            accumulated_fn[-2] = len(batch.edge_labels)
+            val_outputs['dynamic'] = accumulated_fn
+            val_outputs["mask"] = mask_fn
         return val_outputs
 
     def validation_epoch_end(self, val_outputs):
-        dynamic = torch.zeros_like(val_outputs[0]['dynamic'])
-        mask = torch.zeros_like(val_outputs[0]['mask'])
 
-        for k in range(len(val_outputs)):
-            dynamic += val_outputs[k]['dynamic']
-            mask += val_outputs[k]['mask']
+        if 'mask' in val_outputs[0]:
+            dynamic = torch.zeros_like(val_outputs[0]['dynamic'])
+            mask = torch.zeros_like(val_outputs[0]['mask'])
 
-        print("\nedge condition:\n")
-        print(dynamic)
-        print("\nmask\n")
-        print(mask)
+            for k in range(len(val_outputs)):
+                dynamic += val_outputs[k]['dynamic']
+                mask += val_outputs[k]['mask']
+
+            print("\nedge condition:\n")
+            print(dynamic)
+            print("\nmask\n")
+            print(mask)
 
         metrics = pd.DataFrame(val_outputs).mean(axis=0).to_dict()
         metrics = {metric_name: torch.as_tensor(metric) for metric_name, metric in metrics.items()}

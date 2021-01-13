@@ -124,7 +124,8 @@ graph_model_params:
     graph_pruning: True
     prune_factor: 0.05
     prune_frequency: 1
-    mode: "classifier"
+    mode: "classifier_all"
+    prune_min_edge: 5
 
   node_agg_fn: 'sum'
   num_enc_steps: 12  # Number of message passing steps
