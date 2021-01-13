@@ -158,17 +158,17 @@ class MOTNeuralSolver(pl.LightningModule):
             accumulated_fn[-4] = torch.mean(act_pro)
             accumulated_fn[-2] = torch.sum(act_pro<0.5).type(torch.float)/len(final_pros)
         else:
-            accumulated_fn[-6] = -1
-            accumulated_fn[-4] = -1
-            accumulated_fn[-2] = -1
+            accumulated_fn[-6] = 0.5
+            accumulated_fn[-4] = 0.5
+            accumulated_fn[-2] = 0
         if len(inact_pro) >0:
             accumulated_fn[-5] = torch.max(inact_pro)
             accumulated_fn[-3] = torch.mean(inact_pro)
             accumulated_fn[-1] = torch.sum(inact_pro>0.5).type(torch.float)/len(final_pros)
         else: 
-            accumulated_fn[-5] = -1
-            accumulated_fn[-3] = -1
-            accumulated_fn[-1] = -1
+            accumulated_fn[-5] = 0.5
+            accumulated_fn[-3] = 0.5
+            accumulated_fn[-1] = 0
         val_outputs['dynamic'] = accumulated_fn
         return val_outputs
 
@@ -180,8 +180,8 @@ class MOTNeuralSolver(pl.LightningModule):
         print("middle layers FN:",dynamic[0:8],"\n")
         print("active edge number:",dynamic[-8],"\n")
         print("total edge number:",dynamic[-7],"\n")
-        print("final layer FN:",dynamic[-1],"\n")
-        print("final layer FP:",dynamic[-2],"\n")
+        print("final layer FP:",dynamic[-1],"\n")
+        print("final layer FN:",dynamic[-2],"\n")
         print("min active edge score:",dynamic[-6],"\n")
         print("max inactive edge score:",dynamic[-5],"\n")
         print("mean active edge score:",dynamic[-4],"\n")
