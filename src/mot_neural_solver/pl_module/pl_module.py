@@ -148,8 +148,29 @@ class MOTNeuralSolver(pl.LightningModule):
                 mask = outputs['mask'][i]
                 accumulated_fn[i]=torch.sum(batch.edge_labels.view(-1)[~mask])
                 mask_fn[i] = torch.sum(~mask, dim=0)
-            accumulated_fn[-1] = torch.sum(batch.edge_labels.view(-1))
-            accumulated_fn[-2] = len(batch.edge_labels)
+            accumulated_fn[-8] = torch.sum(batch.edge_labels.view(-1))
+            accumulated_fn[-7] = len(batch.edge_labels)
+            final_mask = outputs['mask'][-1]
+            final_pros = outputs['classified_edges'][-1][final_mask]
+            final_act_mask = (batch.edge_labels.view(-1)[final_mask] == True)
+            act_pro = final_pros[final_act_mask]
+            inact_pro = final_pros[~final_act_mask]
+            if len(act_pro) > 0:
+                accumulated_fn[-6] = torch.min(act_pro)
+                accumulated_fn[-4] = torch.mean(act_pro)
+                accumulated_fn[-2] = torch.sum(act_pro < 0.5).type(torch.float) / len(final_pros)
+            else:
+                accumulated_fn[-6] = 0.5
+                accumulated_fn[-4] = 0.5
+                accumulated_fn[-2] = 0
+            if len(inact_pro) > 0:
+                accumulated_fn[-5] = torch.max(inact_pro)
+                accumulated_fn[-3] = torch.mean(inact_pro)
+                accumulated_fn[-1] = torch.sum(inact_pro > 0.5).type(torch.float) / len(final_pros)
+            else:
+                accumulated_fn[-5] = 0.5
+                accumulated_fn[-3] = 0.5
+                accumulated_fn[-1] = 0
             val_outputs['dynamic'] = accumulated_fn
             val_outputs["mask"] = mask_fn
         return val_outputs
@@ -164,10 +185,18 @@ class MOTNeuralSolver(pl.LightningModule):
                 dynamic += val_outputs[k]['dynamic']
                 mask += val_outputs[k]['mask']
 
-            print("\nedge condition:\n")
-            print(dynamic)
-            print("\nmask\n")
-            print(mask)
+            dynamic /= len(val_outputs)
+            mask /= len(val_outputs)
+            print("middle layers FN:", dynamic[range(len(dynamic)-1)], "\n")
+            print("active edge number:", dynamic[-8], "\n")
+            print("total edge number:", dynamic[-7], "\n")
+            print("final layer FP:", dynamic[-1], "\n")
+            print("final layer FN:", dynamic[-2], "\n")
+            print("min active edge score:", dynamic[-6], "\n")
+            print("max inactive edge score:", dynamic[-5], "\n")
+            print("mean active edge score:", dynamic[-4], "\n")
+            print("mean inactive edge score:", dynamic[-3], "\n")
+            print("mask",mask,"\n")
 
         metrics = pd.DataFrame(val_outputs).mean(axis=0).to_dict()
         metrics = {metric_name: torch.as_tensor(metric) for metric_name, metric in metrics.items()}
