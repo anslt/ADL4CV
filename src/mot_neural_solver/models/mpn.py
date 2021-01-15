@@ -439,7 +439,6 @@ class MOTMPNet(nn.Module):
                     for i in range(k):
                         _,argmin = torch_scatter.scatter_min(valid_pro_copy,valid_idx)
                         neighbor = scatter_add(topk_mask.long().cuda(),valid_idx)
-                        topk_mask.cpu()
                         argmin = argmin[neighbor>self.prune_min_edge]
                         topk_mask[argmin] = False
                         valid_pro_copy[argmin] = 2
