@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from torch_scatter import scatter_mean, scatter_max, scatter_add
+from torch_scatter import scatter_mean, scatter_max, scatter_add, scatter_min
 import torch_scatter
 
 from mot_neural_solver.models.mlp import MLP
@@ -40,9 +40,7 @@ class MetaLayer(torch.nn.Module):
             edge_index: tensor with shape [2, M], with M being the number of edges, indicating nonzero entries in the
             graph adjacency (i.e. edges)
             edge_attr: edge features matrix (ordered by edge_index)
-
         Returns: Updated Node and Edge Feature matrices
-
         """
         row, col = edge_index
 
@@ -180,7 +178,6 @@ class MLPGraphIndependent(nn.Module):
     Class used to to encode (resp. classify) features before (resp. after) neural message passing.
     It consists of two MLPs, one for nodes and one for edges, and they are applied independently to node and edge
     features, respectively.
-
     This class is based on: https://github.com/deepmind/graph_nets tensorflow implementation.
     """
 
@@ -222,7 +219,6 @@ class MOTMPNet(nn.Module):
     - 2 encoder MLPs (1 for nodes, 1 for edges) that provide the initial node and edge embeddings, respectively,
     - 4 update MLPs (3 for nodes, 1 per edges used in the 'core' Message Passing Network
     - 1 edge classifier MLP that performs binary classification over the Message Passing Network's output.
-
     This class was initially based on: https://github.com/deepmind/graph_nets tensorflow implementation.
     """
 
@@ -252,11 +248,12 @@ class MOTMPNet(nn.Module):
 
         self.num_enc_steps = model_params['num_enc_steps']
         self.num_class_steps = model_params['num_class_steps']
-        self.num_attention_steps = model_params['num_attention_steps']
-        self.first_prune_step = model_params['first_prune_step']
-        self.graph_pruning = model_params['graph_pruning']
-        self.prune_factor = model_params['prune_factor']
-        
+        self.first_prune_step = model_params['dynamical_graph']['first_prune_step']
+        self.graph_pruning = model_params['dynamical_graph']['graph_pruning']
+        self.prune_factor = model_params['dynamical_graph']['prune_factor']
+        self.prune_mode = model_params['dynamical_graph']['prune_mode']
+        self.prune_min_edge = model_params['dynamical_graph']['prune_min_edge']
+        assert self.prune_mode in ['classifier naive', 'classifier node wise']
         
     def _build_core_MPNet(self, model_params, encoder_feats_dict):
         """
@@ -361,7 +358,6 @@ class MOTMPNet(nn.Module):
               - edge_index: tensor with shape [2, M], with M being the number of edges, indicating nonzero entries in the
                 graph adjacency (i.e. edges) (i.e. sparse adjacency)
               - edge_attr: edge features matrix (sorted by edge apperance in edge_index)
-
         Returns:
             classified_edges: list of unnormalized node probabilites after each MP step
         """
@@ -382,7 +378,6 @@ class MOTMPNet(nn.Module):
         # During training, the feature vectors that the MPNetwork outputs for the  last self.num_class_steps message
         # passing steps are classified in order to compute the loss.
         first_class_step = self.num_enc_steps - self.num_class_steps + 1
-        first_attention_step = self.num_enc_steps - self.num_attention_steps + 1 
         if self.use_attention:
             if self.graph_pruning: 
                 outputs_dict = {'classified_edges': [],'att_coefficients':[],'mask':[]}
@@ -403,11 +398,14 @@ class MOTMPNet(nn.Module):
 
             # Message Passing Step
             if self.use_attention:
-                latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
+                latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index, latent_edge_feats)
             else:
-                edge_feats = torch.zeros(latent_edge_feats.shape[0],16).cuda()
-                latent_node_feats, edge_feats[mask] = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
-                latent_edge_feats = edge_feats
+                if self.graph_pruning:
+                    edge_feats = torch.zeros(latent_edge_feats.shape[0],16).cuda()
+                    latent_node_feats, edge_feats[mask] = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
+                    latent_edge_feats = edge_feats
+                else: 
+                    latent_node_feats, latent_edge_feats = self.MPNet(latent_node_feats, edge_index, latent_edge_feats)
 
             if step >= first_class_step:
                 # Classification Step
@@ -417,16 +415,37 @@ class MOTMPNet(nn.Module):
                 probabilities = probabilities1
                 outputs_dict['classified_edges'].append(probabilities)
 
-            if self.use_attention and step >= first_attention_step:
+            if self.use_attention:
                 outputs_dict['att_coefficients'].append(a.clone())
             
             if self.graph_pruning and step >= self.first_prune_step and step<self.num_enc_steps:
-                valid_pro = probabilities[mask]
-                topk_mask = torch.full((valid_pro.shape[0],), True,dtype=torch.bool)
-                _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
-                topk_mask[indice]= False
-                mask[mask==True]=topk_mask
-                outputs_dict['mask'].append(mask.clone())
+                if self.prune_mode == 'classifier naive':
+                    valid_pro = probabilities[mask]
+                    topk_mask = torch.full((valid_pro.shape[0],), True,dtype=torch.bool)
+                    _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
+                    topk_mask[indice]= False
+                    mask[mask==True]=topk_mask
+                    outputs_dict['mask'].append(mask.clone())
+                if self.prune_mode == 'classifier node wise':
+                    valid_pro = probabilities[mask]
+                    valid_idx = edge_index[0][mask]
+                    
+                    topk_mask = torch.ones(len(valid_pro),dtype=torch.bool)
+                    valid_pro_copy = valid_pro.clone()
+                    
+                    k = torch.ones(len(valid_idx)).cuda()
+                    k = torch.max(scatter_add(k,valid_idx))
+                    k = int(k*self.prune_factor)
+                    for i in range(k):
+                        _,argmin = torch_scatter.scatter_min(valid_pro_copy,valid_idx)
+                        neighbor = scatter_add(topk_mask.long().cuda(),valid_idx)
+                        topk_mask.cpu()
+                        argmin = argmin[neighbor>self.prune_min_edge]
+                        topk_mask[argmin] = False
+                        valid_pro_copy[argmin] = 2
+                        
+                    mask[mask==True]=topk_mask
+                    outputs_dict['mask'].append(mask.clone())
 
         if self.num_enc_steps == 0:
             dec_edge_feats, _ = self.classifier(latent_edge_feats)
