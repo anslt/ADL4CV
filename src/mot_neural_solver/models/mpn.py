@@ -576,7 +576,7 @@ class MOTMPNet(nn.Module):
 
                         valid_dis = distance[mask]
                         topk_mask = torch.full((valid_dis.shape[0],), True, dtype=torch.bool)
-                         _,indice = torch.topk(valid_dis,int(len(valid_dis)*self.prune_factor),largest=False)
+                        _,indice = torch.topk(valid_dis,int(len(valid_dis)*self.prune_factor),largest=False)
                         #_, indice = torch.topk(valid_dis,
                         #                       min(int(len(probabilities) * self.prune_factor), len(valid_dis) - N),
                         #                       largest=True)
