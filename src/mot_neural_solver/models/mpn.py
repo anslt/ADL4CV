@@ -264,7 +264,7 @@ class MOTMPNet(nn.Module):
             self.prune_frequency = model_params["dynamical_graph"]['prune_frequency']
             self.prune_mode = model_params["dynamical_graph"]['mode']
             self.prune_min_edge =  model_params["dynamical_graph"]['prune_min_edge']
-            assert self.prune_mode in ["classifier", "classifier_all", "similarity", "similarity_all"]
+            assert self.prune_mode in ["classifier node wise", "classifier naive", "similarity node wise", "similarity naive"]
         
         
     def _build_core_MPNet(self, model_params, encoder_feats_dict):
@@ -501,18 +501,19 @@ class MOTMPNet(nn.Module):
                     probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
                     prune_keeping_ratio *= self.prune_factor
 
-                    if self.prune_mode == "classifier_all":
+                    if self.prune_mode == "classifier naive":
                         valid_pro = probabilities[mask]
                         topk_mask = torch.full((valid_pro.shape[0],), True,dtype=torch.bool)
-                        #_,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
-                        _,indice = torch.topk(valid_pro, min(int(len(probabilities) * self.prune_factor),len(valid_pro) - N), largest=False)
+                        _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
+                        #_,indice = torch.topk(valid_pro, min(int(len(probabilities) * self.prune_factor),len(valid_pro) - N), largest=False)
                         topk_mask[indice]= False
                         mask[mask==True]=topk_mask
                         outputs_dict['mask'].append(mask.clone())
 
 
-                    elif self.prune_mode == "classifier":
+                    elif self.prune_mode == "classifier node wise":
 
+                        """
                         probabilities = probabilities.cpu()
                         # edge_id = edge_id[ind]
                         probabilities_convert = probabilities[ind]
@@ -543,11 +544,31 @@ class MOTMPNet(nn.Module):
                             discard_num = int(len(prob_i) * self.prune_factor)
                             _, ind_i = torch.topk(prob_i, discard_num, largest=False)
                             mask_convert[index_i[ind_i.long()]] = False
+                            
 
                         mask = mask_convert[ind_back]
                         outputs_dict['mask'].append(mask.clone())
+                        """
+                        valid_pro = probabilities[mask]
+                        valid_idx = edge_index[0][mask]
 
-                    elif self.prune_mode == "similarity_all":
+                        topk_mask = torch.ones(len(valid_pro), dtype=torch.bool)
+                        valid_pro_copy = valid_pro.clone()
+
+                        k = torch.ones(len(valid_idx)).cuda()
+                        k = torch.max(scatter_add(k, valid_idx))
+                        k = int(k * self.prune_factor)
+                        for i in range(k):
+                            _, argmin = torch_scatter.scatter_min(valid_pro_copy, valid_idx)
+                            neighbor = scatter_add(topk_mask.long().cuda(), valid_idx)
+                            argmin = argmin[neighbor > self.prune_min_edge]
+                            topk_mask[argmin] = False
+                            valid_pro_copy[argmin] = 2
+
+                        mask[mask == True] = topk_mask
+                        outputs_dict['mask'].append(mask.clone())
+
+                    elif self.prune_mode == "similarity naive":
 
                         distance = torch.norm(
                             latent_node_feats[edge_index[0, :]] - latent_node_feats[edge_index[1, :]],
@@ -555,17 +576,42 @@ class MOTMPNet(nn.Module):
 
                         valid_dis = distance[mask]
                         topk_mask = torch.full((valid_dis.shape[0],), True, dtype=torch.bool)
-                        # _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
-                        _, indice = torch.topk(valid_dis,
-                                               min(int(len(probabilities) * self.prune_factor), len(valid_dis) - N),
-                                               largest=True)
+                         _,indice = torch.topk(valid_dis,int(len(valid_dis)*self.prune_factor),largest=False)
+                        #_, indice = torch.topk(valid_dis,
+                        #                       min(int(len(probabilities) * self.prune_factor), len(valid_dis) - N),
+                        #                       largest=True)
                         topk_mask[indice] = False
                         mask[mask == True] = topk_mask
                         outputs_dict['mask'].append(mask.clone())
 
 
-                    elif self.prune_mode == "similarity":
+                    elif self.prune_mode == "similarity node wise":
 
+                        distance = torch.norm(
+                            latent_node_feats[edge_index[0, :]] - latent_node_feats[edge_index[1, :]],
+                            dim=1).detach()
+
+                        valid_dis = distance[mask]
+                        valid_idx = edge_index[0][mask]
+
+                        topk_mask = torch.ones(len(valid_dis), dtype=torch.bool)
+                        valid_dis_copy = valid_dis.clone()
+                        valid_dis_max = torch.max(valid_dis_copy)
+
+                        k = torch.ones(len(valid_idx)).cuda()
+                        k = torch.max(scatter_add(k, valid_idx))
+                        k = int(k * self.prune_factor)
+                        for i in range(k):
+                            _, argmin = torch_scatter.scatter_min(valid_dis_copy, valid_idx)
+                            neighbor = scatter_add(topk_mask.long().cuda(), valid_idx)
+                            argmin = argmin[neighbor > self.prune_min_edge]
+                            topk_mask[argmin] = False
+                            valid_dis_copy[argmin] = valid_dis_max + 1
+
+                        mask[mask == True] = topk_mask
+                        outputs_dict['mask'].append(mask.clone())
+
+                        """
                         distance = torch.norm(
                             latent_node_feats[edge_index[0, edge_i]] - latent_node_feats[edge_index[1, edge_i]],
                             dim=1)
@@ -601,6 +647,8 @@ class MOTMPNet(nn.Module):
 
                         mask = mask_convert[ind_back]
                         outputs_dict['mask'].append(mask.clone())
+                        """
+
 
                     probabilities = torch.zeros_like(logits.view(-1))
                     probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
