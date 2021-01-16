@@ -187,6 +187,7 @@ class MOTNeuralSolver(pl.LightningModule):
 
             dynamic /= len(val_outputs)
             mask /= len(val_outputs)
+            print("\n")
             print("middle layers FN:", dynamic[range(len(dynamic)-8)], "\n")
             print("active edge number:", dynamic[-8], "\n")
             print("total edge number:", dynamic[-7], "\n")
