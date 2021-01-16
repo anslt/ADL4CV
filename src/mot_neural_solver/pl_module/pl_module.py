@@ -142,7 +142,7 @@ class MOTNeuralSolver(pl.LightningModule):
         val_outputs = log
 
         if 'mask' in outputs:
-            accumulated_fn = torch.zeros(len(outputs['mask'])+2,).to(device)
+            accumulated_fn = torch.zeros(len(outputs['mask'])+8,).to(device)
             mask_fn = torch.zeros(len(outputs['mask']),).to(device)
             for i in range(len(outputs['mask'])):
                 mask = outputs['mask'][i]
@@ -187,7 +187,7 @@ class MOTNeuralSolver(pl.LightningModule):
 
             dynamic /= len(val_outputs)
             mask /= len(val_outputs)
-            print("middle layers FN:", dynamic[range(len(dynamic)-1)], "\n")
+            print("middle layers FN:", dynamic[range(len(dynamic)-8)], "\n")
             print("active edge number:", dynamic[-8], "\n")
             print("total edge number:", dynamic[-7], "\n")
             print("final layer FP:", dynamic[-1], "\n")
