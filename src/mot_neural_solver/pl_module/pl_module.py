@@ -97,7 +97,7 @@ class MOTNeuralSolver(pl.LightningModule):
         else:
             return optimizer
 
-    ddef _compute_loss(self, outputs, batch):
+    def _compute_loss(self, outputs, batch):
         att = self.hparams['graph_model_params']['attention']['use_attention']
         att_regu = self.hparams['graph_model_params']['attention']['att_regu']
         # Define Balancing weight
