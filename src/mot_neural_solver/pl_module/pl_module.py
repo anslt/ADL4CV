@@ -97,7 +97,8 @@ class MOTNeuralSolver(pl.LightningModule):
         else:
             return optimizer
 
-    def _compute_loss(self, outputs, batch):
+    ddef _compute_loss(self, outputs, batch):
+        att = self.hparams['graph_model_params']['attention']['use_attention']
         att_regu = self.hparams['graph_model_params']['attention']['att_regu']
         # Define Balancing weight
         positive_vals = batch.edge_labels.sum()
@@ -115,19 +116,20 @@ class MOTNeuralSolver(pl.LightningModule):
         
         att_loss_matrix = None
         att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
-        if att_regu:
+        att_loss = torch.FloatTensor([0]).to(loss_class.device)
+        if att and att_regu:
             num_steps_attention = len(outputs['att_coefficients'])
             head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
             att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
             for step in range(num_steps_attention):
                 for head in range(head_factor):
-                    weight = (batch.edge_labels.view(-1) == 0) + (batch.edge_labels.view(-1) == 1) * pos_weight
+                    #weight = (batch.edge_labels.view(-1) == 0) + (batch.edge_labels.view(-1) == 1) * pos_weight
                     a = outputs['att_coefficients'][step][head].view(-1)
                     aa = torch.min(a,torch.ones_like(a).to(a.device))
                     att_loss_matrix[head, step] = F.binary_cross_entropy(
                         aa,
-                        batch.edge_labels.view(-1),
-                        weight=weight)
+                        batch.edge_labels.view(-1))
+                        #weight=weight)
             att_loss = torch.sum(att_loss_matrix) / head_factor
         else:
             att_loss = torch.FloatTensor([0]).to(loss_class.device)
@@ -397,6 +399,8 @@ class MOTNeuralSolver(pl.LightningModule):
             ax.set_ylabel(y_label, fontsize=30)
             ax.set_title("mode:" + mode + " ,epoch:" + str(epoch) + " ,node 1. " + x_labels[i] + " vs " + y_label, fontsize=30)
             ax.set_ylim(0,ylim_max)
+            plt.xticks(fontsize=20)
+            plt.yticks(fontsize=20)
             
             ax = fig.add_subplot(122)
 
@@ -406,6 +410,8 @@ class MOTNeuralSolver(pl.LightningModule):
             ax.set_ylabel(y_label, fontsize=30)
             ax.set_title("mode:" + mode + " ,epoch:" + str(epoch) + " ,node 2. " + x_labels[i] + " vs " + y_label, fontsize=30)
             ax.set_ylim(0,ylim_max)
+            plt.xticks(fontsize=20)
+            plt.yticks(fontsize=20)
             
             file = "epoch_" + str(epoch) + "_" + mode + "_" + x_labels[i] + ".png"
             if path is not None:
