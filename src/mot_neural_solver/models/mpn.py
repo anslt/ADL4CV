@@ -410,9 +410,8 @@ class MOTMPNet(nn.Module):
             if step >= first_class_step:
                 # Classification Step
                 logits, _ = self.classifier(latent_edge_feats)
-                probabilities1 = torch.zeros_like(logits.view(-1))
-                probabilities1[mask] = torch.sigmoid(logits.view(-1)[mask])
-                probabilities = probabilities1
+                probabilities = torch.zeros_like(logits.view(-1))
+                probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
                 outputs_dict['classified_edges'].append(probabilities)
 
             if self.use_attention:
