@@ -340,7 +340,7 @@ class MOTNeuralSolver(pl.LightningModule):
             val_res /= edge_num
             exists_topk /= cal_edge_num
             tracking_exists_topk /= node_num
-            tracking_percentage_topk /= nodenum * torch.FloatTensor(np.arange(self.hparams['visual']['topk'])+1).to(attention.device).unsqueeze(0)
+            tracking_percentage_topk /= node_num * torch.FloatTensor(np.arange(self.hparams['visual']['topk'])+1).to(attention.device).unsqueeze(0)
 
             print("\nEpoch:"+str(self.validation_epoch))
             print(loss_class)
