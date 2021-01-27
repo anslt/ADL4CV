@@ -242,6 +242,7 @@ class MOTMPNet(nn.Module):
         self.use_attention = model_params["attention"]["use_attention"]
         if self.use_attention:
             self.use_att_regu = model_params["attention"]["use_att_regu"]
+            self.attention_head_num = model_params["attention"]["attention_head_num"]
 
         # Define Encoder and Classifier Networks
         encoder_feats_dict = model_params['encoder_feats_dict']
@@ -264,6 +265,7 @@ class MOTMPNet(nn.Module):
             self.prune_frequency = model_params["dynamical_graph"]['prune_frequency']
             self.prune_mode = model_params["dynamical_graph"]['mode']
             self.prune_min_edge =  model_params["dynamical_graph"]['prune_min_edge']
+            self.edge_mlp_output_dim = model_params['edge_model_feats_dict']['fc_dims'][-1]
             assert self.prune_mode in ["classifier node wise", "classifier naive", "similarity node wise", "similarity naive"]
         
         
@@ -437,18 +439,19 @@ class MOTMPNet(nn.Module):
                 outputs_dict = {'classified_edges': [],'mask':[]}
             else: outputs_dict = {'classified_edges': []}
         
-        mask = torch.full((edge_index.shape[1],), True,dtype=torch.bool)
-        prune_keeping_ratio = 1.0
 
-        if self.graph_pruning and (self.prune_mode in ["classifier", "similarity"]):
-            edge_id = edge_index.detach().transpose(0, 1).contiguous().cpu()
-            row = edge_id[:, 0]
-            col = edge_id[:, 1]
+        if self.graph_pruning:
+            mask = torch.full((edge_index.shape[1],), True, dtype=torch.bool)
+            prune_keeping_ratio = 1.0
+            if self.prune_mode in ["classifier", "similarity"]:
+                edge_id = edge_index.detach().transpose(0, 1).contiguous().cpu()
+                row = edge_id[:, 0]
+                col = edge_id[:, 1]
 
-            row0, ind = torch.sort(row)
-            _, ind_back = torch.sort(ind)
-            output_row, count = torch.unique_consecutive(row0, return_counts=True)
-            cum_count = torch.cumsum(count, dim=0)
+                row0, ind = torch.sort(row)
+                _, ind_back = torch.sort(ind)
+                output_row, count = torch.unique_consecutive(row0, return_counts=True)
+                # cum_count = torch.cumsum(count, dim=0)
 
         for step in range(1, self.num_enc_steps + 1):
             
@@ -460,13 +463,29 @@ class MOTMPNet(nn.Module):
 
             # Message Passing Step
             if self.use_attention:
-                if self.network_split:
-                    latent_node_feats, latent_edge_feats, a = self.MPNet[step-1](latent_node_feats, edge_index.T[mask].T,
+                if self.graph_pruning and torch.all(mask):
+                    edge_feats = torch.zeros(latent_edge_feats.shape[0], self.edge_mlp_output_dim).cuda()
+                    a = torch.zeros(latent_edge_feats.shape[0], self.attention_head_num).cuda()
+
+                    if self.network_split:
+                        latent_node_feats, edge_feats[mask], a_mask = self.MPNet[step - 1](latent_node_feats,
+                                                                                   edge_index.T[mask].T,
+                                                                                   latent_edge_feats[mask])
+                    else:
+                        latent_node_feats, edge_feats[mask], a_mask = self.MPNet(latent_node_feats, edge_index.T[mask].T,
                                                                          latent_edge_feats[mask])
+                    latent_edge_feats = edge_feats
+                    a[mask] = a_mask
+
                 else:
-                    latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
+                    if self.network_split:
+                         latent_node_feats, latent_edge_feats,a = self.MPNet[step-1](latent_node_feats, edge_index,
+                                                                             latent_edge_feats)
+                    else:
+                         latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index, latent_edge_feats)
+
             elif self.graph_pruning:
-                edge_feats = torch.zeros(latent_edge_feats.shape[0],16).cuda()
+                edge_feats = torch.zeros(latent_edge_feats.shape[0],self.edge_mlp_output_dim).cuda()
 
                 if self.network_split:
                     latent_node_feats, edge_feats[mask] = self.MPNet[step-1](latent_node_feats, edge_index.T[mask].T,
@@ -484,18 +503,21 @@ class MOTMPNet(nn.Module):
             if step >= first_class_step:
                 # Classification Step
                 logits, _ = self.classifier(latent_edge_feats)
-                N = x.size(0)
+                pruning_this_step = self.graph_pruning and step >= self.first_prune_step \
+                        and (step - self.graph_pruning) % self.prune_frequency == 0
 
-                probabilities = None
                 if ~self.graph_pruning:
                     outputs_dict['classified_edges'].append(torch.sigmoid(logits))
+                elif ~pruning_this_step:
+                    probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
+                    outputs_dict['classified_edges'].append(probabilities)
+
 
 
                 if self.use_attention and self.use_att_regu and step >= first_attention_step:
                     outputs_dict['att_coefficients'].append(a.clone())
             
-                if self.graph_pruning and step >= self.first_prune_step and step<self.num_enc_steps \
-                        and (step - self.graph_pruning) % self.prune_frequency == 0:
+                if pruning_this_step:
 
                     probabilities = torch.zeros_like(logits.view(-1))
                     probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
