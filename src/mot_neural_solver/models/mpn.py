@@ -241,7 +241,7 @@ class MOTMPNet(nn.Module):
         self.network_split = model_params["network_split"]
         self.use_attention = model_params["attention"]["use_attention"]
         if self.use_attention:
-            self.use_att_regu = model_params["attention"]["use_att_regu"]
+            self.use_att_regu = model_params["attention"]["att_regu"]
             self.attention_head_num = model_params["attention"]["attention_head_num"]
 
         # Define Encoder and Classifier Networks
