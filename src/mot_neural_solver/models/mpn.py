@@ -465,7 +465,7 @@ class MOTMPNet(nn.Module):
             if self.use_attention:
                 if self.graph_pruning and torch.all(mask):
                     edge_feats = torch.zeros(latent_edge_feats.shape[0], self.edge_mlp_output_dim).cuda()
-                    a = torch.zeros(latent_edge_feats.shape[0], self.attention_head_num).cuda()
+                    a = torch.zeros(self.attention_head_num, latent_edge_feats.shape[0]).cuda()
 
                     if self.network_split:
                         latent_node_feats, edge_feats[mask], a_mask = self.MPNet[step - 1](latent_node_feats,
