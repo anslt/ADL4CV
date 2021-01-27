@@ -475,7 +475,7 @@ class MOTMPNet(nn.Module):
                         latent_node_feats, edge_feats[mask], a_mask = self.MPNet(latent_node_feats, edge_index.T[mask].T,
                                                                          latent_edge_feats[mask])
                     latent_edge_feats = edge_feats
-                    a[mask] = a_mask
+                    a[:,mask] = a_mask
 
                 else:
                     if self.network_split:
