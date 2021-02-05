@@ -74,7 +74,7 @@ class EdgeModel(nn.Module):
         return self.edge_mlp(out)
 
 class AttentionModel(nn.Module):
-    def __init__(self, configs,time_aware=True):
+    def __init__(self, configs,time_aware=True, pruning = False):
         super(AttentionModel, self).__init__()
 
         self.alpha = configs["alpha"]
@@ -86,6 +86,7 @@ class AttentionModel(nn.Module):
         self.aa = nn.Parameter(torch.empty(size=(self.attention_head_num,2*self.in_features))).cuda() #[k,64]
         nn.init.xavier_uniform_(self.aa.data, gain=1.414)
         self.leakyrelu = nn.LeakyReLU(self.alpha)
+        self.pruning = pruning
 
     def forward(self, x,row,col):
         xx = torch.cat([x[row], x[col]], dim=1)                                                          # cat([M,d=32],[M,d=32])->[M,d=64]
