@@ -415,7 +415,7 @@ class MOTMPNet(nn.Module):
                 dec_edge_feats, _ = self.classifier(latent_edge_feats)
                 outputs_dict['classified_edges'].append(dec_edge_feats)
             if self.use_attention and step >= first_attention_step:
-                outputs_dict['att_coefficients'].append(a)
+                outputs_dict['att_coefficients'].append(a.clone())
 
         if self.num_enc_steps == 0:
             dec_edge_feats, _ = self.classifier(latent_edge_feats)
