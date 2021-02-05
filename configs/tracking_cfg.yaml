@@ -173,3 +173,8 @@ graph_model_params:
     arch: resnet50
     model_weights_path:
       resnet50: trained_models/reid/resnet50_market_cuhk_duke.tar-232
+
+
+visual:
+  path: 'visual'
+  topk: 20
