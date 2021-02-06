@@ -123,7 +123,7 @@ class MOTNeuralSolver(pl.LightningModule):
                         batch.edge_labels.view(-1))
                         #weight=weight)
             att_loss = torch.sum(att_loss_matrix) / head_factor
-            return loss_class + att_regu_strength*loss_att
+            return loss_class + att_regu_strength * att_loss
         return loss_class
 
     def training_step(self, batch, batch_idx):
