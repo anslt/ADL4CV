@@ -93,6 +93,7 @@ class MOTNeuralSolver(pl.LightningModule):
             return optimizer
 
     def _compute_loss(self, outputs, batch):
+        att = self.hparams['graph_model_params']['attention']['use_attention']
         att_regu = self.hparams['graph_model_params']['attention']['att_regu']
         # Define Balancing weight
         positive_vals = batch.edge_labels.sum()
@@ -108,17 +109,19 @@ class MOTNeuralSolver(pl.LightningModule):
             loss_class += F.binary_cross_entropy(outputs['classified_edges'][step].view(-1),
                                                         batch.edge_labels.view(-1),
                                                         weight= weight)    
-        if att_regu:
-            loss_att = 0
+        if att and att_regu:
             num_steps_attention = len(outputs['att_coefficients'])
             head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
-            att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
+            att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
             for step in range(num_steps_attention):
                 for head in range(head_factor):
                     a = outputs['att_coefficients'][step][head].view(-1)
-                    aa = torch.min(2*a,torch.full(a.shape,1).cuda())
-                    loss_att += F.binary_cross_entropy(aa,batch.edge_labels.view(-1))
-            loss_att = loss_att/head_factor
+                    aa = torch.min(a,torch.ones_like(a).to(a.device))
+                    att_loss_matrix[head, step] = F.binary_cross_entropy(
+                        aa,
+                        batch.edge_labels.view(-1))
+                        #weight=weight)
+            att_loss = torch.sum(att_loss_matrix) / head_factor
             return loss_class + att_regu_strength*loss_att
         return loss_class
 
