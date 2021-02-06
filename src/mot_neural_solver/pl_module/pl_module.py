@@ -111,6 +111,7 @@ class MOTNeuralSolver(pl.LightningModule):
                                                         weight= weight)    
         if att and att_regu:
             num_steps_attention = len(outputs['att_coefficients'])
+            att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
             head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
             att_loss_matrix = torch.empty(size=(head_factor, num_steps_attention)).cuda()
             for step in range(num_steps_attention):
