@@ -120,8 +120,8 @@ class MOTNeuralSolver(pl.LightningModule):
                     aa = torch.min(a,torch.ones_like(a).to(a.device))
                     att_loss_matrix[head, step] = F.binary_cross_entropy(
                         aa,
-                        batch.edge_labels.view(-1))
-                        #weight=weight)
+                        batch.edge_labels.view(-1),
+                        weight=weight)
             att_loss = torch.sum(att_loss_matrix) / head_factor
             return loss_class + att_regu_strength * att_loss
         return loss_class
