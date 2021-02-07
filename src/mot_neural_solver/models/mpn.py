@@ -81,6 +81,7 @@ class AttentionModel(nn.Module):
         self.alpha = configs["alpha"]
         self.in_features = configs["in_features"]
         self.attention_head_num = configs["attention_head_num"]
+        self.use_new_softmax = configs["new_softmax"]
 
         # add cuda directly
         self.aa = nn.Parameter(torch.empty(size=(self.attention_head_num,2*self.in_features))).cuda() #[k,64]
@@ -91,16 +92,21 @@ class AttentionModel(nn.Module):
         
         xx = torch.cat([x[row], x[col]], dim=1)  # cat([M,d=32],[M,d=32])->[M,d=64]
         e = self.leakyrelu(torch.matmul(self.aa, xx.T))  # [k,64]*[64,M]->[k,M]
-        # a = torch_scatter.composite.scatter_softmax(e, row, dim=1, eps=1e-12)  # [k,M]->[k,M]
         
+        if self.use_new_softmax:
 
-        flow_out = row < col
-        flow_in = row > col
-        a_out =  torch_scatter.composite.scatter_softmax(e[:,flow_out],row[flow_out], dim=1, eps=1e-12)
-        a_in = torch_scatter.composite.scatter_softmax(e[:,flow_in],row[flow_in], dim=1, eps=1e-12)
-        a = torch.zeros_like(e).to(e.device)
-        a.T[flow_out] = a_out.T
-        a.T[flow_in] = a_in.T 
+            flow_out = row < col
+            flow_in = row > col
+            a_out =  torch_scatter.composite.scatter_softmax(e[:,flow_out],row[flow_out], dim=1, eps=1e-12)
+            a_in = torch_scatter.composite.scatter_softmax(e[:,flow_in],row[flow_in], dim=1, eps=1e-12)
+            a = torch.zeros_like(e).to(e.device)
+            a.T[flow_out] = a_out.T
+            a.T[flow_in] = a_in.T
+
+        else:
+
+            a = torch_scatter.composite.scatter_softmax(e, row, dim=1, eps=1e-12)  # [k,M]->[k,M]
+
         return a
 
 class TimeAwareNodeModel(nn.Module):
@@ -253,6 +259,7 @@ class MOTMPNet(nn.Module):
         if self.use_attention:
             self.use_att_regu = model_params["attention"]["att_regu"]
             self.attention_head_num = model_params["attention"]["attention_head_num"]
+            self.ues_new_softmax = model_params["attention"]["new_softmax"]
 
         # Define Encoder and Classifier Networks
         encoder_feats_dict = model_params['encoder_feats_dict']
