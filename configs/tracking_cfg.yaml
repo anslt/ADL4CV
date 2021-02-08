@@ -118,7 +118,7 @@ graph_model_params:
     attention_head_num: 2
     att_regu: False
     att_regu_strength: 0.5
-    new_softmax: True
+    new_softmax: False
 
   dynamical_graph:
     first_prune_step: 4
