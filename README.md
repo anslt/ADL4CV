@@ -59,24 +59,24 @@ python scripts/train.py with data_splits.train=all_train train_params.save_every
 
 For other parameters in training, we introduce below:
 
-graph_model_params: \\
-  time_aware: whether the node updating is time aware (defualt: False)
-  network_split: False
-  attention:
-    use_attention: False
-    alpha: 0.2
-    attention_head_num: 2
-    att_regu: False
-    att_regu_strength: 0.5
-    new_softmax: False
+graph_model_params: <br />
+  time_aware: whether the node updating is time aware (defualt: False) <br />
+  network_split: False <br />
+  attention: <br />
+    use_attention: False <br />
+    alpha: 0.2 <br />
+    attention_head_num: 2 <br />
+    att_regu: False <br />
+    att_regu_strength: 0.5 <br />
+    new_softmax: False <br />
 
-  dynamical_graph:
-    first_prune_step: 4
-    graph_pruning: False
-    prune_factor: 0.05
-    prune_frequency: 1
-    mode: "classifier node wise"
-    prune_min_edge: 5
+  dynamical_graph: <br />
+    first_prune_step: 4 <br />
+    graph_pruning: False <br />
+    prune_factor: 0.05 <br />
+    prune_frequency: 1 <br />
+    mode: "classifier node wise" <br />
+    prune_min_edge: 5 <br />
 
 
 
