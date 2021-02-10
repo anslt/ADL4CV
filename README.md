@@ -59,22 +59,22 @@ For other parameters in training, we introduce below:
 
 graph_model_params: <br />
 &nbsp; time_aware: whether the node updating is time aware (defualt: False) <br />
- network_split: False <br />
- attention: <br />
-    <dd>use_attention: False </dd><br />
-    alpha: 0.2 <br />
-    attention_head_num: 2 <br />
-    att_regu: False <br />
-    att_regu_strength: 0.5 <br />
-    new_softmax: False <br />
+&nbsp; network_split: False <br />
+&nbsp; attention: <br />
+&nbsp;&nbsp;    use_attention: False  <br />
+&nbsp;&nbsp;    alpha: 0.2 <br />
+&nbsp;&nbsp;    attention_head_num: 2 <br />
+&nbsp;&nbsp;    att_regu: False <br />
+&nbsp;&nbsp;    att_regu_strength: 0.5 <br />
+&nbsp;&nbsp;    new_softmax: False <br />
 
-  dynamical_graph: <br />
-    first_prune_step: 4 <br />
-    graph_pruning: False <br />
-    prune_factor: 0.05 <br />
-    prune_frequency: 1 <br />
-    mode: "classifier node wise" <br />
-    prune_min_edge: 5 <br />
+&nbsp;  dynamical_graph: <br />
+&nbsp;&nbsp;    first_prune_step: 4 <br />
+&nbsp;&nbsp;    graph_pruning: False <br />
+&nbsp;&nbsp;    prune_factor: 0.05 <br />
+&nbsp;&nbsp;    prune_frequency: 1 <br />
+&nbsp;&nbsp;    mode: "classifier node wise" <br />
+&nbsp;&nbsp;    prune_min_edge: 5 <br />
 
  
 ## Cross-Validation
