@@ -67,8 +67,8 @@ graph_model_params: <br />
     att_regu: False <br />
     att_regu_strength: 0.5 <br />
     new_softmax: False <br />
-  dynamical_graph: <br />
-    first_prune_step: 4 <br />
+>  dynamical_graph: <br />
+>>    first_prune_step: 4 <br />
     graph_pruning: False <br />
     prune_factor: 0.05 <br />
     prune_frequency: 1 <br />
