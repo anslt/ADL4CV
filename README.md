@@ -79,7 +79,8 @@ We train a model with edge pruning:
 python scripts/train.py with cross_val_split=2 train_params.save_every_epoch=True train_params.num_epochs=25 train_params.num_workers=4 graph_model_params.dynamical_graph.graph_pruning=True
 ```
 
-
+## Visualization
+We use our attention + edge pruning to generate a small demo by clicking [here](https://drive.google.com/file/d/1EooBjkQwfYpPrTlxxEKm1x22wYoz5sDH/view?usp=sharing).
 
 
 
