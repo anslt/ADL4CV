@@ -59,7 +59,7 @@ python scripts/train.py with data_splits.train=all_train train_params.save_every
 
 For other parameters in training, we introduce below:
 
-graph_model_params:
+graph_model_params: \\
   time_aware: whether the node updating is time aware (defualt: False)
   network_split: False
   attention:
@@ -78,12 +78,7 @@ graph_model_params:
     mode: "classifier node wise"
     prune_min_edge: 5
 
-For training a model on the `MOT20` dataset, you need to use its  [named configuration](https://sacred.readthedocs.io/en/stable/configuration.html#named-configurations) 
-`configs/mot20/tracking_cfg.yaml`. For instance, to reproduce the training of the `MOT20` model we provide run the 
-following:
-```
-python scripts/train.py with configs/mot20/tracking_cfg.yaml train_params.save_every_epoch=True train_params.num_epochs=22
-```
+
 
 
 
