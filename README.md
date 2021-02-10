@@ -61,13 +61,12 @@ graph_model_params: <br />
 > time_aware: whether the node updating is time aware (defualt: False) <br />
 > network_split: False <br />
 > attention: <br />
-    use_attention: False <br />
+>>    use_attention: False <br />
     alpha: 0.2 <br />
     attention_head_num: 2 <br />
     att_regu: False <br />
     att_regu_strength: 0.5 <br />
     new_softmax: False <br />
-
   dynamical_graph: <br />
     first_prune_step: 4 <br />
     graph_pruning: False <br />
