@@ -1,19 +1,17 @@
-# Learning a Better Neural Network Architecture for Multiple Object Tracking
+# Learning a Neural Solver for Multiple Object Tracking
 
-This implementation is based on the **CVPR 2020 (oral)** paper *Learning a Neural Solver for Multiple Object Tracking* ([Guillem Brasó](https://dvl.in.tum.de/team/braso/), [Laura Leal-Taixe](https://dvl.in.tum.de/team/lealtaixe/))
+This the official implementation of our **CVPR 2020 (oral)** paper *Learning a Neural Solver for Multiple Object Tracking* ([Guillem Brasó](https://dvl.in.tum.de/team/braso/), [Laura Leal-Taixe](https://dvl.in.tum.de/team/lealtaixe/))  
 [[Paper]](https://arxiv.org/abs/1912.07515)[[Youtube]](https://www.youtube.com/watch?v=YWEirYMaLWc)[[CVPR Daily]](https://www.rsipvision.com/ComputerVisionNews-2020July/55/)
-The old implementation addreess is [[here]](https://github.com/dvl-tum/mot_neural_solver).
+![Method Visualization](data/pipeline_viz.png)
 
-Out 2 mechanism is showed below
-![Method Visualization](data/pic1.png)
-
+## Updates
+- (November 2020) Added support for [MOT20](https://motchallenge.net/data/MOT20/) (including [Tracktor](https://arxiv.org/abs/1903.05625) object detector fine-tuning) and processing long sequences, solved issues with OOM errors.  
+- (June 2020) Code release.
 ## Setup
-
-If you want to look the original setup, please old [[old_README.md]](https://github.com/anslt/ADL4CV/blob/master/old_README.md)
 
 1. Clone and enter this repository:
    ```
-   git clone --recursive https://github.com/anslt/ADL4CV.git
+   git clone --recursive https://github.com/dvl-tum/mot_neural_solver.git 
    cd mot_neural_solver
    ```
 2. Create an [Anaconda environment](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) for this project:
@@ -58,6 +56,45 @@ For every training/evaluation experiment you can specify a `run_id` string. This
  date will be used to create an identifier for the experiment being run. A folder named after this identifier, containing
   model checkpoints, logs and output files will be created  at `$OUTPUT_PATH/experiments`(`OUTPUT_PATH` is specified at `src/mot_neural_solver/path_cfg.py`).
 
+## Preprocessing Detections
+**NOTE**: You can skip this step if you will only be working with the `MOT15, MO16`, `MOT17`and `MOT20` datasets, and run steps 6 and 7 of [Setup](#Setup).
+
+As explained in the paper, we preprocess public detections by either running [Tracktor](https://arxiv.org/abs/1903.05625) (with no ReID) on them **(1)** or filtering false positives and refining box coordinates with a pretrained object detector **(2)**.
+
+On the `MOT15, MO16` and `MOT17` you can run the first preprocessing scheme **(1)** with:
+```
+python scripts/preprocess_detects.py
+```
+To run **(1)** on the `MOT20` dataset, run instead:
+```
+python scripts/preprocess_detects.py with configs/mot20/preprocessing_cfg.yaml
+```
+If you want to use the alternative scheme **(2)**, run the following:
+```
+python scripts/preprocess_detects.py with prepr_w_tracktor=False
+```
+All these scripts will store the preprocessed detections in the right locations within `$DATA_PATH`.
+
+If you use the second option **(2)**, make sure to set add the [named configuration](https://sacred.readthedocs.io/en/stable/configuration.html#named-configurations) `configs/no_tracktor_cfg.yaml`
+to your training and evaluation experiments by adding `with configs/no_tracktor_cfg.yaml` after your python command.
+
+## Fine-Tuning Tracktor
+In order to obtain results for `MOT20`, we fine-tuned [Tracktor](https://arxiv.org/abs/1903.05625) on it. 
+To do so, we borrowed all code from [this Colab Notebook](https://colab.research.google.com/drive/1_arNo-81SnqfbdtAhb3TBSU5H0JXQ0_1), which
+was made public in [Tracktor's  repository](https://github.com/phil-bergmann/tracking_wo_bnw), and organized it 
+under `obj_detect` and a python script. You can reproduce the fine-tuning of the model we provide in step 7 of [Setup](#Setup) by running:
+```
+python scripts/train_obj_detect.py 
+```
+As a sanity check, we made a submission to the `MOT20` test dataset with this model, and obtained the following results.
+For reference, we include the comparison with the results made public by Tracktor's authors on the [CVPR19 Tracking Challenge](https://motchallenge.net/results/CVPR_2019_Tracking_Challenge/),
+and our *MOT Neural Solver* built on top of the fine-tuned Tracktor.
+
+|   Dataset     |Method     | MOTA         | IDF1           |            MT              |     ML       |
+|  :---:    | :---:        |   :---:        |     :---:           |   :---:             |  :---:       |
+| **CVPR19 Challenge** |Tracktor++     |     51.3     |     47.6      |   313 (24.9%)      |     326 (26.0%)     | 
+| **MOT20**  |     Tracktor with no ReID, fine-tuned by us     |52.1     |      44.0         |     362(29.1%)     |  332 (26.7%) |
+| **MOT20**  |     Ours (MPNTrack)     |     57.6     |     59.1     |   474 (38.2%)     |  279 (22.5%) |
 
 ## Training
 You can train a model by running:
@@ -143,7 +180,27 @@ This will be done by searching output files containing `$RUN_ID` on them, so it'
 | **Cross-Val** |     64.3     |     70.5       |    5610      |   114284   |     531      |     643 (39.3%)     |  363  (22.2%)|
 
 
+## Citation
+ If you use our work in your research, please cite our publication:
 
+```
+    @InProceedings{braso_2020_CVPR,
+    author={Guillem Brasó and Laura Leal-Taixé},
+    title={Learning a Neural Solver for Multiple Object Tracking},
+    booktitle = {The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month = {June},
+    year = {2020}
+}
+```
+Please, also consider citing Tracktor if you use it for preprocessing detections:
+```
+  @InProceedings{tracktor_2019_ICCV,
+  author = {Bergmann, Philipp and Meinhardt, Tim and Leal{-}Taix{\'{e}}, Laura},
+  title = {Tracking Without Bells and Whistles},
+  booktitle = {The IEEE International Conference on Computer Vision (ICCV)},
+  month = {October},
+  year = {2019}}
+```
 
 
 
