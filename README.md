@@ -16,32 +16,30 @@ If you want to look the original setup, please old [[old_README.md]](https://git
    git clone --recursive https://github.com/anslt/ADL4CV.git
    cd mot_neural_solver
    ```
-2. Create an [Anaconda environment](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) for this project:
-    1. `conda env create -f environment.yaml`
-    2. `conda activate mot_neural_solver`
-    3. `pip install -e tracking_wo_bnw`
-    4. `pip install -e .`
-
-3. (**OPTIONAL**) Modify the variables `DATA_PATH`, and `OUTPUT_PATH` in  `src/mot_neural_solver/path_cfg.py` so that they are set to
-your preferred locations for storing datasets and output results, respectively. By default, these paths will be in this project's root under folders
-named `data` and `output`, respectively.
-4. Download the [MOTChallenge data](https://motchallenge.net/) by running:
+2. (**OPTIONAL**) Download Anaconda if you work on Colab
+    ```
+    wget -c https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
+    chmod +x Anaconda3-2020.11-Linux-x86_64.sh
+    bash ./Anaconda3-2020.11-Linux-x86_64.sh -b -f -p /usr/local
+    rm Anaconda3-2020.11-Linux-x86_64.sh
+    ```
+3. Create an [Anaconda environment](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) for this project:
+    ```
+    conda env create -f environment.yaml
+    conda activate mot_neural_solver
+    pip install -e tracking_wo_bnw
+    pip install -e .
+    ```
+4. Download the [MOTChallenge data](https://motchallenge.net/), reid network and preprocessed detection:
     ```
     bash scripts/setup/download_motcha.sh
-    ```
-5. Download the our reid network, [Tracktor](https://arxiv.org/abs/1903.05625)'s object detector, and our trained models:
-    ```
     bash scripts/setup/download_models.sh
-    ```
-6. (**OPTIONAL**) For convenience, we provide the preprocessed detection files. You can download them by running:
-    ```
     bash scripts/setup/download_prepr_dets.sh
     ```
-7. (**NEW**) If you are going to be working with [MOT20](https://motchallenge.net/data/MOT20/), run the following to 
-download the dataset, preprocessed detections, and pretrained models:
+5. (**OPTIONAL**) Install other lacking package if you work on Colab:
     ```
-    bash scripts/setup/download_mot20.sh
-    ```.
+    conda install -y ipykernel
+    ```
 
 ## Training
 You can train a model by running:
@@ -60,9 +58,9 @@ python scripts/train.py with data_splits.train=all_train train_params.save_every
 For other parameters in training, we introduce below:
 
 graph_model_params: <br />
-  time_aware: whether the node updating is time aware (defualt: False) <br />
-  network_split: False <br />
-  attention: <br />
+: time_aware: whether the node updating is time aware (defualt: False) <br />
+: network_split: False <br />
+: attention: <br />
     use_attention: False <br />
     alpha: 0.2 <br />
     attention_head_num: 2 <br />
@@ -77,11 +75,6 @@ graph_model_params: <br />
     prune_frequency: 1 <br />
     mode: "classifier node wise" <br />
     prune_min_edge: 5 <br />
-
-
-
-
-
 
  
 ## Cross-Validation
