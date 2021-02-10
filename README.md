@@ -58,23 +58,23 @@ python scripts/train.py with data_splits.train=all_train train_params.save_every
 For other parameters in training, we introduce below:
 
 graph_model_params: <br />
-&nbsp; time_aware: whether the node updating is time aware (defualt: False) <br />
-&nbsp; network_split: False <br />
-&nbsp; attention: <br />
-&nbsp;&nbsp;    use_attention: False  <br />
-&nbsp;&nbsp;    alpha: 0.2 <br />
-&nbsp;&nbsp;    attention_head_num: 2 <br />
-&nbsp;&nbsp;    att_regu: False <br />
-&nbsp;&nbsp;    att_regu_strength: 0.5 <br />
-&nbsp;&nbsp;    new_softmax: False <br />
+&nbsp;&nbsp; time_aware: whether the node updating is time aware (defualt: False) <br />
+&nbsp;&nbsp; network_split: False <br />
+&nbsp;&nbsp; attention: <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    use_attention: False  <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    alpha: 0.2 <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    attention_head_num: 2 <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    att_regu: False <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    att_regu_strength: 0.5 <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    new_softmax: False <br />
 
-&nbsp;  dynamical_graph: <br />
-&nbsp;&nbsp;    first_prune_step: 4 <br />
-&nbsp;&nbsp;    graph_pruning: False <br />
-&nbsp;&nbsp;    prune_factor: 0.05 <br />
-&nbsp;&nbsp;    prune_frequency: 1 <br />
-&nbsp;&nbsp;    mode: "classifier node wise" <br />
-&nbsp;&nbsp;    prune_min_edge: 5 <br />
+&nbsp;&nbsp;  dynamical_graph: <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    first_prune_step: 4 <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    graph_pruning: False <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    prune_factor: 0.05 <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    prune_frequency: 1 <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    mode: "classifier node wise" <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    prune_min_edge: 5 <br />
 
  
 ## Cross-Validation
