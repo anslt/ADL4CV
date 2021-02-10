@@ -43,7 +43,6 @@ download the dataset, preprocessed detections, and pretrained models:
     bash scripts/setup/download_mot20.sh
     ```.
 
-
 ## Training
 You can train a model by running:
 ```
