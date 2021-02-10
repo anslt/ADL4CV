@@ -59,10 +59,10 @@ For other parameters in training, we introduce below:
 
 graph_model_params: <br />
 &nbsp;&nbsp; time_aware: whether the node updating is time aware (defualt: False) <br />
-&nbsp;&nbsp; network_split: False <br />
+&nbsp;&nbsp; network_split: whether share MLP in different iterations of message pssing (defualt: False) <br />
 &nbsp;&nbsp; attention: <br />
-&nbsp;&nbsp;&nbsp;&nbsp;    use_attention: False  <br />
-&nbsp;&nbsp;&nbsp;&nbsp;    alpha: 0.2 <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    use_attention: whether use attention False (defualt: False) <br />
+&nbsp;&nbsp;&nbsp;&nbsp;    alpha: (deafualt:0.2) <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    attention_head_num: 2 <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    att_regu: False <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    att_regu_strength: 0.5 <br />
