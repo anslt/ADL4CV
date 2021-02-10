@@ -57,6 +57,15 @@ python scripts/train.py with data_splits.train=all_train train_params.save_every
 
 For other parameters in training, we introduce below:
 
+<dl>
+    <dt>Term 1</dt>
+    <dd>definition 1</dd>
+    <dd>definition 2</dd>
+    <dt>Term 2</dt>
+    <dd>definition 1</dd>
+    <dd>definition 2</dd>
+</dl>
+
 graph_model_params: <br />
  time_aware: whether the node updating is time aware (defualt: False) <br />
  network_split: False <br />
