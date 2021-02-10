@@ -2,9 +2,10 @@
 
 This implementation is based on the **CVPR 2020 (oral)** paper *Learning a Neural Solver for Multiple Object Tracking* ([Guillem Brasó](https://dvl.in.tum.de/team/braso/), [Laura Leal-Taixe](https://dvl.in.tum.de/team/lealtaixe/))
 [[Paper]](https://arxiv.org/abs/1912.07515)[[Youtube]](https://www.youtube.com/watch?v=YWEirYMaLWc)[[CVPR Daily]](https://www.rsipvision.com/ComputerVisionNews-2020July/55/)
+
 The old implementation addreess is [here](https://github.com/dvl-tum/mot_neural_solver).
 
-Out 2 mechanism is showed below
+Our 2 new mechanisms are showed below
 ![Method Visualization](data/pic_1.png)
 
 ## Setup
