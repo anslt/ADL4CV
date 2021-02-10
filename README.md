@@ -5,7 +5,7 @@ This implementation is based on the **CVPR 2020 (oral)** paper *Learning a Neura
 The old implementation addreess is [[here]](https://github.com/dvl-tum/mot_neural_solver).
 
 Out 2 mechanism is showed below
-![Method Visualization](data/pic1.png)
+![Method Visualization](data/pic_1.png)
 
 ## Setup
 
@@ -41,22 +41,7 @@ named `data` and `output`, respectively.
 download the dataset, preprocessed detections, and pretrained models:
     ```
     bash scripts/setup/download_mot20.sh
-    ```
-
-
-
-## Running Experiments
-We use [Sacred](http://sacred.readthedocs.io/en/latest/index.html) to configure our experiments, and [Pytorch Lightning](https://pytorch-lightning.readthedocs.io/en/latest/), to
-structure our training code. We recommend reading these libraries' documentations for an overview.
-
-You can configure training and evaluation experiments by modifying the options in `configs/tracking_cfg.yaml`. As for
-preprocessing, all available options can be found in `configs/preprocessing_cfg.yaml`.
- Note that you can also use [Sacred's command line interface](https://sacred.readthedocs.io/en/stable/command_line.html)
- to modify configuration entries. We show some examples in the sections below.
-
-For every training/evaluation experiment you can specify a `run_id` string. This, together with the execution
- date will be used to create an identifier for the experiment being run. A folder named after this identifier, containing
-  model checkpoints, logs and output files will be created  at `$OUTPUT_PATH/experiments`(`OUTPUT_PATH` is specified at `src/mot_neural_solver/path_cfg.py`).
+    ```.
 
 
 ## Training
@@ -73,6 +58,27 @@ In order to train with all available sequences, and reproduce the training of th
 python scripts/train.py with data_splits.train=all_train train_params.save_every_epoch=True train_params.num_epochs=6
 ```
 
+For other parameters in training, we introduce below:
+
+graph_model_params:
+  time_aware: whether the node updating is time aware (defualt: False)
+  network_split: False
+  attention:
+    use_attention: False
+    alpha: 0.2
+    attention_head_num: 2
+    att_regu: False
+    att_regu_strength: 0.5
+    new_softmax: False
+
+  dynamical_graph:
+    first_prune_step: 4
+    graph_pruning: False
+    prune_factor: 0.05
+    prune_frequency: 1
+    mode: "classifier node wise"
+    prune_min_edge: 5
+
 For training a model on the `MOT20` dataset, you need to use its  [named configuration](https://sacred.readthedocs.io/en/stable/configuration.html#named-configurations) 
 `configs/mot20/tracking_cfg.yaml`. For instance, to reproduce the training of the `MOT20` model we provide run the 
 following:
@@ -80,43 +86,8 @@ following:
 python scripts/train.py with configs/mot20/tracking_cfg.yaml train_params.save_every_epoch=True train_params.num_epochs=22
 ```
 
-**NOTE**: The first time you use a sequence for training or testing, it will need to be processed. This means that
-ground truth boxes (if available) will be assigned to detection boxes, detection files will be stored with sequence metainformation, and (possibly) reid embeddings
-will be computed and stored. This process should take ~30 mins for train/test sets of `MOT15` and `MOT17` and only needs to be
- performed once per set of detections. Computing reid embeddings in advance is optional for testing but required for
- training. Doing so, speeds up training significantly and reduces substantially the training memory requirements. As explained in our
- paper, we observed no significant performance boost from training CNN layers.
-
-The reid network was trained with [torchreid](https://github.com/KaiyangZhou/deep-person-reid), by using ResNet50's
-default configuration with images resized to 128 x 56, adding two fully connected layers (see `resnet50_fc256` in `src/mot_neural_solver/models/resnet.py`)
-and training for 232 epochs. The training script will be provided in a future release.
 
 
-## Evaluation
-You can evaluate a trained model on a set of sequences by running:
-```
-python scripts/evaluate.py 
-```
-The weights used and sequences tested are determined by parameters `ckpt_path` and `data_splits.test`, respectively. By default, the weights from the model we provide will be used and the `MOT15` and `MOT17` test sequences will be evaluated. The resulting output files yield the following `MOT17` metrics on the train/test set:
-
-|    MOT17       | MOTA         | IDF1           |       FP     |     FN     |     IDs      |     MT              |     ML       |
-|  :---:    | :---:        |     :---:      |    :---:     | :---:      |    :---:     |   :---:             |  :---:       |
-| **Train** |     64.4     |     70.8       |    5087      |   114460   |     504      |     636 (38.8%)     |  362  (22.1%)|
-| **Test**  |     58.4     |     62.1       |    17836     | 214869     |     1146     |     655 (27.8%)     |  793 (33.7%) |
-
-Note that these results show a slight difference with respect to the ones reported in the paper. Specifically, IDF1 has improved by 0.5 points,
-and MOTA has decreased by 0.4 points. This change is due to using a newer pytorch version and small code differences introduced while cleaning-up.
-
-In order to evaluate a model on the `MOT20` dataset, run the following:
-```
-python scripts/evaluate.py with configs/mot20/tracking_cfg.py 
-```
-The resulting output files yield the following `MOT20` train and test performance
-
-|      MOT20     | MOTA         | IDF1           |       FP     |     FN     |     IDs      |     MT              |     ML       |
-|  :---:    | :---:        |     :---:      |    :---:     | :---:      |    :---:     |   :---:             |  :---:       |
-| **Train** |     70.1     |     66.9       |    38260      |   299110   |     1821      |     1073 (48.4%)     |  362  (10.8%)|
-| **Test**  |     57.6     |     59.1       |    16953     | 201384     |     1210     |     474 (38.2%)     |  279 (22.5%) |
 
  
 ## Cross-Validation
