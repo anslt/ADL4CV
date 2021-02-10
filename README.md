@@ -42,20 +42,8 @@ If you want to look the original setup, please read [old_README.md](https://gith
     ```
 
 ## Training
-You can train a model by running:
-```
-python scripts/train.py 
-```
-By default, sequences `MOT17-04` and `MOT17-11` will be used for validation, and all remaining sequences in the `MOT15`
-and `MOT17` datasets will be used for training. You can use other validation sets by
-modifying the parameters `data_splits.train` and `data_splits.val`, or use several splits and perform [cross-validation](#Cross-Validation).
 
-In order to train with all available sequences, and reproduce the training of the `MOT17` model we provide, run the following:
-```
-python scripts/train.py with data_splits.train=all_train train_params.save_every_epoch=True train_params.num_epochs=6
-```
-
-For other parameters in training, we introduce below:
+For other parameters not including in [old_README.md](https://github.com/anslt/ADL4CV/blob/master/old_README.md) in training, we introduce below:
 
 graph_model_params: <br />
 &nbsp;&nbsp; time_aware: whether the node updating is time aware (defualt: False) <br />
@@ -76,26 +64,6 @@ graph_model_params: <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    mode: the score is generated in which method (deafualt: "classifier node wise") <br />
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;["classifier node wise","classifier naive","similarity node wise","similarity naive"] <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    prune_min_edge: the threshold of linked edges to stop pruning for a node (deafualt: 5) <br />
-
- 
-## Cross-Validation
-As explained in the paper, we perform cross-validation to report the metrics of ablation experiments.
-To do so, we divide `MOT17` sequences in 3 sets of train/val splits. For every configuration, we then run
-3 trainings, one per validation split, and report the overall metrics.
-
-You can train and evaluate models in this manner by running:
-```
-RUN_ID=your_config_name
-python scripts/train.py with run_id=$RUN_ID cross_val_split=1
-python scripts/train.py with run_id=$RUN_ID cross_val_split=2
-python scripts/train.py with run_id=$RUN_ID cross_val_split=3
-python scripts/cross_validation.py with run_id=$RUN_ID
-```
-By setting `cross_val_split` to 1, 2 or 3, the training and validation sequences corresponding
-to the splits we used in the paper will be set automatically (see `src/mot_neural_solver/data/splits.py`).
-
-The last script will gather the stored metrics from each training run, and compute overall `MOT17 metrics` with them.
-This will be done by searching output files containing `$RUN_ID` on them, so it's important that this tag is unique.
 
 
 ## Our Settiings
