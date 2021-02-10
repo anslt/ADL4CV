@@ -98,7 +98,7 @@ The last script will gather the stored metrics from each training run, and compu
 This will be done by searching output files containing `$RUN_ID` on them, so it's important that this tag is unique.
 
 
-###Our Settiings
+## Our Settiings
 We use the cross_val_split 2.
 We train a model with regularized attention by running:
 ```
