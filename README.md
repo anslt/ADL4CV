@@ -57,21 +57,10 @@ python scripts/train.py with data_splits.train=all_train train_params.save_every
 
 For other parameters in training, we introduce below:
 
-<ul>
-  <li>Coffee</li>
-  <li>Tea
-    <ul>
-      <li>Black tea</li>
-      <li>Green tea</li>
-    </ul>
-  </li>
-  <li>Milk</li>
-</ul>
-
 graph_model_params: <br />
-: time_aware: whether the node updating is time aware (defualt: False) <br />
-: network_split: False <br />
-: attention: <br />
+> time_aware: whether the node updating is time aware (defualt: False) <br />
+> network_split: False <br />
+> attention: <br />
     use_attention: False <br />
     alpha: 0.2 <br />
     attention_head_num: 2 <br />
