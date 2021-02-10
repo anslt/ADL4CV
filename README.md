@@ -58,7 +58,7 @@ python scripts/train.py with data_splits.train=all_train train_params.save_every
 For other parameters in training, we introduce below:
 
 graph_model_params: <br />
- time_aware: whether the node updating is time aware (defualt: False) <br />
+&nbsp; time_aware: whether the node updating is time aware (defualt: False) <br />
  network_split: False <br />
  attention: <br />
     <dd>use_attention: False </dd><br />
