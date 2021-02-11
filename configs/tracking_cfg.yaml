@@ -115,13 +115,13 @@ graph_model_params:
     use_attention: False
     alpha: 0.2
     attention_head_num: 2
-    att_regu: True
+    att_regu: False
     att_regu_strength: 0.2
-    new_softmax: True
+    new_softmax: False
 
   dynamical_graph:
     first_prune_step: 4
-    graph_pruning: True
+    graph_pruning: False
     prune_factor: 0.15
     mode: "classifier node wise"
     prune_min_edge: 5

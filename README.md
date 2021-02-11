@@ -48,7 +48,6 @@ For other parameters not including in [old_README.md](https://github.com/anslt/A
 
 graph_model_params: <br />
 &nbsp;&nbsp; time_aware: whether the node updating is time aware (defualt: False) <br />
-&nbsp;&nbsp; network_split: whether share MLP in different iterations of message pssing (defualt: False) <br />
 &nbsp;&nbsp; attention: <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    use_attention: whether use attention (defualt: False) <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    alpha: LeakyRelu parameter (deafualt: 0.2) <br />
