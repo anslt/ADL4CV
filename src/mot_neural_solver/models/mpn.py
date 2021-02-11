@@ -473,9 +473,9 @@ class MOTMPNet(nn.Module):
                     mask[mask == True] = topk_mask
                     outputs_dict['mask'].append(mask.clone())
 
-            probabilities = torch.zeros_like(logits.view(-1))
-            probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
-            outputs_dict['classified_edges'].append(probabilities)
+                probabilities = torch.zeros_like(logits.view(-1))
+                probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
+                outputs_dict['classified_edges'].append(probabilities)
 
         if self.num_enc_steps == 0:
             dec_edge_feats, _ = torch.sigmoid(self.classifier(latent_edge_feats))
