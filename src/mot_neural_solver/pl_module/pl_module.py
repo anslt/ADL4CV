@@ -93,7 +93,7 @@ class MOTNeuralSolver(pl.LightningModule):
             return optimizer
 
     def _compute_loss(self, outputs, batch):
-        att = self.hparams['graph_model_params']['attention']['use_attention']
+        use_att = self.hparams['graph_model_params']['attention']['use_attention']
         att_regu = self.hparams['graph_model_params']['attention']['att_regu']
         # Define Balancing weight
         positive_vals = batch.edge_labels.sum()
@@ -109,7 +109,7 @@ class MOTNeuralSolver(pl.LightningModule):
             loss_class += F.binary_cross_entropy(outputs['classified_edges'][step].view(-1),
                                                         batch.edge_labels.view(-1),
                                                         weight= weight)    
-        if att and att_regu:
+        if use_att and att_regu:
             num_steps_attention = len(outputs['att_coefficients'])
             att_regu_strength = self.hparams['graph_model_params']['attention']['att_regu_strength']
             head_factor = self.hparams['graph_model_params']['attention']['attention_head_num']
