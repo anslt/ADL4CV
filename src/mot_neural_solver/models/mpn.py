@@ -138,17 +138,13 @@ class TimeAwareNodeModel(nn.Module):
             flow_out_mask = row < col                                                                       # [M1,]
             flow_out_row, flow_out_col = row[flow_out_mask], col[flow_out_mask]                             # [M,] -> [M1,]
             flow_out_input = torch.cat([x[flow_out_row], edge_attr[flow_out_mask]], dim=1)                  # [M1,d=32+2*16]
-            #flow_out = torch.empty(size=(self.head_factor,flow_out_input.shape[0],32)) 
             flow_out = []
 
             flow_in_mask = row > col                                                                        # [M2,]
             flow_in_row, flow_in_col = row[flow_in_mask], col[flow_in_mask]                                 # [M,] -> [M2,]
             flow_in_input = torch.cat([x[flow_in_row], edge_attr[flow_in_mask]], dim=1)                     # [M2,32+2*16]
-            #flow_in = torch.empty(size=(self.head_factor,flow_in_input.shape[0],32))
             flow_in = []
             for i in range(self.head_factor):
-                #flow_out[i] = self.flow_out_mlp[i](flow_out_input)  # [M,48]->[k,M,32]
-                #flow_in[i] = self.flow_in_mlp[i](flow_in_input)
                 flow_out.append(self.flow_out_mlp[i](flow_out_input).cuda())
                 flow_in.append(self.flow_in_mlp[i](flow_in_input).cuda())                                     
             flow_out = torch.stack(flow_out,dim=0)                                                          # [k,M1,d=32] 
@@ -156,7 +152,7 @@ class TimeAwareNodeModel(nn.Module):
  
             if self.use_attention:
                 a_out = self.attention_out(x,flow_out_row,flow_out_col)                                     # [k,M1]
-                a_in = self.attention_in(x,flow_in_row,flow_out_col)                                        # [k,M2]
+                a_in = self.attention_in(x,flow_in_row,flow_in_col)                                        # [k,M2]
                 flow_out = torch.mul(flow_out.transpose(0,2),a_out.transpose(0,1)).transpose(0,1).transpose(1,2).reshape(flow_out_row.shape[0],-1)
                 # [d=32,M1,k] [M1,k] -> [d=32,M1,k] -> [M1,32,k] -> [M1,k,32] -> [M1,32k]
                 flow_in = torch.mul(flow_in.transpose(0,2),a_in.transpose(0,1)).transpose(0,1).transpose(1,2).reshape(flow_in_row.shape[0],-1) 
@@ -254,7 +250,6 @@ class MOTMPNet(nn.Module):
         self.node_cnn = bb_encoder
         self.model_params = model_params
         self.time_aware = model_params["time_aware"]
-        self.network_split = model_params["network_split"]
         self.use_attention = model_params["attention"]["use_attention"]
         if self.use_attention:
             self.use_att_regu = model_params["attention"]["att_regu"]
@@ -279,11 +274,10 @@ class MOTMPNet(nn.Module):
         if self.graph_pruning:
             self.first_prune_step = model_params["dynamical_graph"]['first_prune_step']
             self.prune_factor = model_params["dynamical_graph"]['prune_factor']
-            self.prune_frequency = model_params["dynamical_graph"]['prune_frequency']
             self.prune_mode = model_params["dynamical_graph"]['mode']
             self.prune_min_edge =  model_params["dynamical_graph"]['prune_min_edge']
             self.edge_mlp_output_dim = model_params['edge_model_feats_dict']['fc_dims'][-1]
-            assert self.prune_mode in ["classifier node wise", "classifier naive", "similarity node wise", "similarity naive"]
+            assert self.prune_mode in ["classifier node wise", "classifier naive"]
         
         
     def _build_core_MPNet(self, model_params, encoder_feats_dict):
@@ -345,57 +339,20 @@ class MOTMPNet(nn.Module):
                        dropout_p=node_model_feats_dict['dropout_p'],
                        use_batchnorm=node_model_feats_dict['use_batchnorm']).cuda()
 
-        if self.network_split:
-            network = []
-            for step in range(1, self.num_enc_steps + 1):
-                flow_out_mlp = []
-                for i in range(head_factor):
-                    flow_out_mlp.append(MLP(input_dim=node_model_in_dim,
-                                            fc_dims=node_model_feats_dict_time['fc_dims'],
-                                            dropout_p=node_model_feats_dict_time['dropout_p'],
-                                            use_batchnorm=node_model_feats_dict_time['use_batchnorm']).cuda())
-                if self.time_aware:
-                    flow_in_mlp = []
-                    for i in range(head_factor):
-                        flow_in_mlp.append(MLP(input_dim=node_model_in_dim,
-                                               fc_dims=node_model_feats_dict_time['fc_dims'],
-                                               dropout_p=node_model_feats_dict_time['dropout_p'],
-                                               use_batchnorm=node_model_feats_dict_time['use_batchnorm']).cuda())
-                    network += [MetaLayer(edge_model=EdgeModel(edge_mlp=edge_mlp),
-                                     node_model=TimeAwareNodeModel(flow_out_mlp=flow_out_mlp,
-                                                                   flow_in_mlp=flow_in_mlp,
-                                                                   node_mlp=node_mlp,
-                                                                   node_agg_fn=node_agg_fn,
-                                                                   time_aware=self.time_aware,
-                                                                   attention_configs=attention_configs),
-                                     use_attention=self.use_attention)]
-                else:
-                    network += [MetaLayer(edge_model=EdgeModel(edge_mlp=edge_mlp),
-                                     node_model=TimeAwareNodeModel(flow_out_mlp=flow_out_mlp,
-                                                                   flow_in_mlp=None,
-                                                                   node_mlp=node_mlp,
-                                                                   node_agg_fn=node_agg_fn,
-                                                                   time_aware=self.time_aware,
-                                                                   attention_configs=attention_configs),
-                                     use_attention=self.use_attention)]
-
-            return network
-        else:
-
-            flow_out_mlp = []
-            for i in range(head_factor):
-                flow_out_mlp.append(MLP(input_dim=node_model_in_dim,
+        flow_out_mlp = []
+        for i in range(head_factor):
+            flow_out_mlp.append(MLP(input_dim=node_model_in_dim,
                                         fc_dims=node_model_feats_dict_time['fc_dims'],
                                         dropout_p=node_model_feats_dict_time['dropout_p'],
                                         use_batchnorm=node_model_feats_dict_time['use_batchnorm']).cuda())
-            if self.time_aware:
-                flow_in_mlp = []
-                for i in range(head_factor):
-                    flow_in_mlp.append(MLP(input_dim=node_model_in_dim,
+        if self.time_aware:
+            flow_in_mlp = []
+            for i in range(head_factor):
+                flow_in_mlp.append(MLP(input_dim=node_model_in_dim,
                                        fc_dims=node_model_feats_dict_time['fc_dims'],
                                        dropout_p=node_model_feats_dict_time['dropout_p'],
                                        use_batchnorm=node_model_feats_dict_time['use_batchnorm']).cuda())
-                return MetaLayer(edge_model=EdgeModel(edge_mlp=edge_mlp),
+            return MetaLayer(edge_model=EdgeModel(edge_mlp=edge_mlp),
                                  node_model=TimeAwareNodeModel(flow_out_mlp=flow_out_mlp,
                                                                flow_in_mlp=flow_in_mlp,
                                                                node_mlp=node_mlp,
@@ -403,9 +360,9 @@ class MOTMPNet(nn.Module):
                                                                time_aware=self.time_aware,
                                                                attention_configs=attention_configs),
                                   use_attention=self.use_attention)
-            else:
-                return MetaLayer(edge_model=EdgeModel(edge_mlp = edge_mlp),
-                                 node_model=TimeAwareNodeModel(flow_out_mlp = flow_out_mlp,
+        else:
+            return MetaLayer(edge_model=EdgeModel(edge_mlp = edge_mlp),
+                             node_model=TimeAwareNodeModel(flow_out_mlp = flow_out_mlp,
                                                                flow_in_mlp = None,
                                                                node_mlp = node_mlp,
                                                                node_agg_fn = node_agg_fn,
@@ -457,21 +414,8 @@ class MOTMPNet(nn.Module):
             else: outputs_dict = {'classified_edges': []}
         
 
-        if self.graph_pruning:
-            mask = torch.full((edge_index.shape[1],), True, dtype=torch.bool)
-            prune_keeping_ratio = 1.0
-            if self.prune_mode in ["classifier", "similarity"]:
-                edge_id = edge_index.detach().transpose(0, 1).contiguous().cpu()
-                row = edge_id[:, 0]
-                col = edge_id[:, 1]
-
-                row0, ind = torch.sort(row)
-                _, ind_back = torch.sort(ind)
-                output_row, count = torch.unique_consecutive(row0, return_counts=True)
-                # cum_count = torch.cumsum(count, dim=0)
-
+        mask = torch.full((edge_index.shape[1],), True, dtype=torch.bool)
         for step in range(1, self.num_enc_steps + 1):
-            
             # Reattach the initially encoded embeddings before the update
             if self.reattach_initial_edges:
                 latent_edge_feats = torch.cat((initial_edge_feats, latent_edge_feats), dim=1)              # [M,16]+[M,16] -> [M,32]
@@ -480,114 +424,40 @@ class MOTMPNet(nn.Module):
 
             # Message Passing Step
             if self.use_attention:
-                if self.graph_pruning and torch.all(mask):
-                    edge_feats = torch.zeros(latent_edge_feats.shape[0], self.edge_mlp_output_dim).cuda()
-                    a = torch.zeros(self.attention_head_num, latent_edge_feats.shape[0]).cuda()
-
-                    if self.network_split:
-                        latent_node_feats, edge_feats[mask], a_mask = self.MPNet[step - 1](latent_node_feats,
-                                                                                   edge_index.T[mask].T,
-                                                                                   latent_edge_feats[mask])
-                    else:
-                        latent_node_feats, edge_feats[mask], a_mask = self.MPNet(latent_node_feats, edge_index.T[mask].T,
-                                                                         latent_edge_feats[mask])
+                if self.graph_pruning:
+                    a = torch.zeros(self.attention_head_num,edge_index.shape[1]).cuda()
+                    edge_feats = torch.zeros(latent_edge_feats.shape[0],16).cuda()
+                    latent_node_feats, edge_feats[mask],a_masked = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
                     latent_edge_feats = edge_feats
-                    a[:,mask] = a_mask
-
+                    a.T[mask] = a_masked.T
                 else:
-                    if self.network_split:
-                         latent_node_feats, latent_edge_feats,a = self.MPNet[step-1](latent_node_feats, edge_index,
-                                                                             latent_edge_feats)
-                    else:
-                         latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index, latent_edge_feats)
-
-            elif self.graph_pruning:
-                edge_feats = torch.zeros(latent_edge_feats.shape[0],self.edge_mlp_output_dim).cuda()
-
-                if self.network_split:
-                    latent_node_feats, edge_feats[mask] = self.MPNet[step-1](latent_node_feats, edge_index.T[mask].T,
-                                                                     latent_edge_feats[mask])
-                else:
-                    latent_node_feats, edge_feats[mask] = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
-                latent_edge_feats = edge_feats
+                    latent_node_feats, latent_edge_feats,a = self.MPNet(latent_node_feats, edge_index, latent_edge_feats)
             else:
-                if self.network_split:
-                    latent_node_feats, latent_edge_feats = self.MPNet[step-1](latent_node_feats, edge_index,
-                                                                         latent_edge_feats)
-                else:
+                if self.graph_pruning:
+                    edge_feats = torch.zeros(latent_edge_feats.shape[0],16).cuda()
+                    latent_node_feats, edge_feats[mask] = self.MPNet(latent_node_feats, edge_index.T[mask].T, latent_edge_feats[mask])
+                    latent_edge_feats = edge_feats
+                else: 
                     latent_node_feats, latent_edge_feats = self.MPNet(latent_node_feats, edge_index, latent_edge_feats)
 
             if step >= first_class_step:
                 # Classification Step
                 logits, _ = self.classifier(latent_edge_feats)
-                pruning_this_step = self.graph_pruning and step >= self.first_prune_step \
-                        and (step - self.graph_pruning) % self.prune_frequency == 0
+                pruning_this_step = self.graph_pruning and step >= self.first_prune_step and step < self.num_enc_steps
+                probabilities = torch.zeros_like(logits.view(-1))
+                probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
+                outputs_dict['classified_edges'].append(probabilities)
+                
+                if self.use_attention and step >= first_attention_step:
+                    outputs_dict['att_coefficients'].append(a)
 
-                if ~self.graph_pruning:
-                    outputs_dict['classified_edges'].append(torch.sigmoid(logits))
-                elif ~pruning_this_step:
-                    probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
-                    outputs_dict['classified_edges'].append(probabilities)
-
-
-
-                if self.use_attention and self.use_att_regu and step >= first_attention_step:
-                    outputs_dict['att_coefficients'].append(a.clone())
-            
                 if pruning_this_step:
-
-                    probabilities = torch.zeros_like(logits.view(-1))
-                    probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
-                    prune_keeping_ratio *= self.prune_factor
-
                     if self.prune_mode == "classifier naive":
                         valid_pro = probabilities[mask]
                         topk_mask = torch.full((valid_pro.shape[0],), True,dtype=torch.bool)
                         _,indice = torch.topk(valid_pro,int(len(valid_pro)*self.prune_factor),largest=False)
-                        #_,indice = torch.topk(valid_pro, min(int(len(probabilities) * self.prune_factor),len(valid_pro) - N), largest=False)
                         topk_mask[indice]= False
-                        mask[mask==True]=topk_mask
-                        outputs_dict['mask'].append(mask.clone())
-
-
                     elif self.prune_mode == "classifier node wise":
-
-                        """
-                        probabilities = probabilities.cpu()
-                        # edge_id = edge_id[ind]
-                        probabilities_convert = probabilities[ind]
-                        mask_convert = mask[ind]
-
-                        # N = x.size(0)
-                        for i in range(len(output_row)):
-
-                            if i == 0:
-                                prob_i = probabilities_convert[range(cum_count[i])]
-                                index_i = torch.LongTensor(list(range(cum_count[i])))
-                                mask_i = mask_convert[range(cum_count[i])]
-                                # temp = 0
-                            else:
-                                prob_i = probabilities_convert[range(cum_count[i - 1], cum_count[i])]
-                                index_i = torch.LongTensor(list(range(cum_count[i - 1], cum_count[i])))
-                                mask_i = mask_convert[range(cum_count[i - 1], cum_count[i])]
-                                # temp = cum_count[i - 1]
-                            # print(index_i.shape[0])
-                            # print(prob_i.shape[0])
-
-                            index_i = index_i[mask_i]
-                            prob_i = prob_i[mask_i]
-
-                            # print(prob_i)
-                            if len(index_i) <= self.prune_min_edge:
-                                continue
-                            discard_num = int(len(prob_i) * self.prune_factor)
-                            _, ind_i = torch.topk(prob_i, discard_num, largest=False)
-                            mask_convert[index_i[ind_i.long()]] = False
-                            
-
-                        mask = mask_convert[ind_back]
-                        outputs_dict['mask'].append(mask.clone())
-                        """
                         valid_pro = probabilities[mask]
                         valid_idx = edge_index[0][mask]
 
@@ -603,98 +473,10 @@ class MOTMPNet(nn.Module):
                             argmin = argmin[neighbor > self.prune_min_edge]
                             topk_mask[argmin] = False
                             valid_pro_copy[argmin] = 2
-
-                        mask[mask == True] = topk_mask
-                        outputs_dict['mask'].append(mask.clone())
-
-                    elif self.prune_mode == "similarity naive":
-
-                        distance = torch.norm(
-                            latent_node_feats[edge_index[0, :]] - latent_node_feats[edge_index[1, :]],
-                            dim=1).detach()
-
-                        valid_dis = distance[mask]
-                        topk_mask = torch.full((valid_dis.shape[0],), True, dtype=torch.bool)
-                        _,indice = torch.topk(valid_dis,int(len(valid_dis)*self.prune_factor),largest=False)
-                        #_, indice = torch.topk(valid_dis,
-                        #                       min(int(len(probabilities) * self.prune_factor), len(valid_dis) - N),
-                        #                       largest=True)
-                        topk_mask[indice] = False
-                        mask[mask == True] = topk_mask
-                        outputs_dict['mask'].append(mask.clone())
-
-
-                    elif self.prune_mode == "similarity node wise":
-
-                        distance = torch.norm(
-                            latent_node_feats[edge_index[0, :]] - latent_node_feats[edge_index[1, :]],
-                            dim=1).detach()
-
-                        valid_dis = distance[mask]
-                        valid_idx = edge_index[0][mask]
-
-                        topk_mask = torch.ones(len(valid_dis), dtype=torch.bool)
-                        valid_dis_copy = valid_dis.clone()
-                        valid_dis_max = torch.max(valid_dis_copy)
-
-                        k = torch.ones(len(valid_idx)).cuda()
-                        k = torch.max(scatter_add(k, valid_idx))
-                        k = int(k * self.prune_factor)
-                        for i in range(k):
-                            _, argmin = torch_scatter.scatter_min(valid_dis_copy, valid_idx)
-                            neighbor = scatter_add(topk_mask.long().cuda(), valid_idx)
-                            argmin = argmin[neighbor > self.prune_min_edge]
-                            topk_mask[argmin] = False
-                            valid_dis_copy[argmin] = valid_dis_max + 1
-
-                        mask[mask == True] = topk_mask
-                        outputs_dict['mask'].append(mask.clone())
-
-                        """
-                        distance = torch.norm(
-                            latent_node_feats[edge_index[0, edge_i]] - latent_node_feats[edge_index[1, edge_i]],
-                            dim=1)
-                        # edge_id = edge_id[ind]
-                        distance_convert = distance[ind]
-                        mask_convert = mask[ind]
-
-                        # N = x.size(0)
-                        for i in range(len(output_row)):
-
-                            if i == 0:
-                                dist_i = distance_convert[range(cum_count[i])]
-                                index_i = torch.LongTensor(list(range(cum_count[i])))
-                                mask_i = mask_convert[range(cum_count[i])]
-                                # temp = 0
-                            else:
-                                dist_i = distance_convert[range(cum_count[i - 1], cum_count[i])]
-                                index_i = torch.LongTensor(list(range(cum_count[i - 1], cum_count[i])))
-                                mask_i = mask_convert[range(cum_count[i - 1], cum_count[i])]
-                                # temp = cum_count[i - 1]
-                            # print(index_i.shape[0])
-                            # print(prob_i.shape[0])
-
-                            index_i = index_i[mask_i]
-                            dist_i = dist_i[mask_i]
-
-                            # print(prob_i)
-                            if len(index_i) <= self.prune_min_edge:
-                                continue
-                            discard_num = int(len(dist_i) * self.prune_factor)
-                            _, ind_i = torch.topk(dist_i, discard_num, largest=False)
-                            mask_convert[index_i[ind_i.long()]] = False
-
-                        mask = mask_convert[ind_back]
-                        outputs_dict['mask'].append(mask.clone())
-                        """
-
-
-                    probabilities = torch.zeros_like(logits.view(-1))
-                    probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
-                    outputs_dict['classified_edges'].append(probabilities)
+                    mask[mask == True] = topk_mask
+                    outputs_dict['mask'].append(mask.clone())
 
         if self.num_enc_steps == 0:
             dec_edge_feats, _ = torch.sigmoid(self.classifier(latent_edge_feats))
             outputs_dict['classified_edges'].append(dec_edge_feats)
-
         return outputs_dict
