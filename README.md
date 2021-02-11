@@ -62,7 +62,7 @@ graph_model_params: <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    prune_factor: how many edges are pruned in each iteration(deafualt: 0.05) <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    prune_frequency: the frequency prune the graph(deafualt: 1) <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    mode: the score is generated in which method (deafualt: "classifier node wise") <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;["classifier node wise","classifier naive","similarity node wise","similarity naive"] <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;["classifier node wise","classifier naive"] <br />
 &nbsp;&nbsp;&nbsp;&nbsp;    prune_min_edge: the threshold of linked edges to stop pruning for a node (deafualt: 5) <br />
 
 

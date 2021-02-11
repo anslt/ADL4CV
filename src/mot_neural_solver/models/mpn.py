@@ -444,9 +444,6 @@ class MOTMPNet(nn.Module):
                 # Classification Step
                 logits, _ = self.classifier(latent_edge_feats)
                 pruning_this_step = self.graph_pruning and step >= self.first_prune_step and step < self.num_enc_steps
-                probabilities = torch.zeros_like(logits.view(-1))
-                probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
-                outputs_dict['classified_edges'].append(probabilities)
                 
                 if self.use_attention and step >= first_attention_step:
                     outputs_dict['att_coefficients'].append(a)
@@ -475,6 +472,10 @@ class MOTMPNet(nn.Module):
                             valid_pro_copy[argmin] = 2
                     mask[mask == True] = topk_mask
                     outputs_dict['mask'].append(mask.clone())
+
+            probabilities = torch.zeros_like(logits.view(-1))
+            probabilities[mask] = torch.sigmoid(logits.view(-1)[mask])
+            outputs_dict['classified_edges'].append(probabilities)
 
         if self.num_enc_steps == 0:
             dec_edge_feats, _ = torch.sigmoid(self.classifier(latent_edge_feats))
