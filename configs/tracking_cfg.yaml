@@ -116,7 +116,7 @@ graph_model_params:
     alpha: 0.2
     attention_head_num: 2
     att_regu: False
-    att_regu_strength: 0.2
+    att_regu_strength: 0.5
     new_softmax: False
 
   dynamical_graph:
