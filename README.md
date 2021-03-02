@@ -82,4 +82,24 @@ python scripts/train.py with cross_val_split=2 train_params.save_every_epoch=Tru
 We use our attention + edge pruning to generate a small demo by clicking [here](https://drive.google.com/file/d/1EooBjkQwfYpPrTlxxEKm1x22wYoz5sDH/view?usp=sharing).
 
 
+## Citation
+ If you use our work in your research, please cite the original publication:
 
+```
+    @InProceedings{braso_2020_CVPR,
+    author={Guillem Brasó and Laura Leal-Taixé},
+    title={Learning a Neural Solver for Multiple Object Tracking},
+    booktitle = {The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month = {June},
+    year = {2020}
+}
+```
+Please, also consider citing Tracktor if you use it for preprocessing detections:
+```
+  @InProceedings{tracktor_2019_ICCV,
+  author = {Bergmann, Philipp and Meinhardt, Tim and Leal{-}Taix{\'{e}}, Laura},
+  title = {Tracking Without Bells and Whistles},
+  booktitle = {The IEEE International Conference on Computer Vision (ICCV)},
+  month = {October},
+  year = {2019}}
+```
